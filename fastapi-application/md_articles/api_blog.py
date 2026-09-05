@@ -11,7 +11,6 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Reques
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from PIL import Image
-from pydantic import BaseModel
 from sqlalchemy import select
 
 from config_log import logF
@@ -42,53 +41,13 @@ from md_articles.schema_art import (
     scan_content_art,
     sync_registry_with_disk,
 )
+from md_articles.schema_blog import LoginIn, MetaIn, RegisterIn, SectionOut, UserOut
 
 
 router_blog_api = APIRouter(
     prefix="/api/blog",
     tags=["blog api"],
 )
-
-
-# ==============================================================================
-# ++++++++++++++++++++++++++ pydantic схемы API ++++++++++++++++++++++++++++++++
-# ------------------------------------------------------------------------------
-class UserOut(BaseModel):
-    id: int
-    username: str
-    email: str
-    image_file: str
-
-
-class RegisterIn(BaseModel):
-    username: str = ""
-    email: str = ""
-    password: str = ""
-    confirm_password: str = ""
-
-
-class LoginIn(BaseModel):
-    email: str = ""
-    password: str = ""
-    remember: bool = False
-
-
-class MetaIn(BaseModel):
-    file_name: str = ""
-    author: str = ""
-    lang: str = ""
-    title: str = ""
-
-
-class SectionOut(BaseModel):
-    name: str
-    label: str
-    count: int
-
-
-class MessageOut(BaseModel):
-    message: str
-    category: str
 
 
 # ==============================================================================
