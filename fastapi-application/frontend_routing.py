@@ -2,7 +2,7 @@
 Подключение собранного React-приложения (SPA) к FastAPI.
 Этот модуль — единственная точка, в которой FastAPI узнаёт про фронтенд.
 
-Что именно делает setup_spa(app):
+Что именно делает setup_react_routing_assets(app):
   1) app.mount('/assets', StaticFiles(frontend/dist/assets, check_dir=False))
      — отдаёт хэшированные бандлы Vite с корректными MIME и долгим кэшем.
      check_dir=False позволяет стартовать приложение даже без собранного
@@ -83,7 +83,7 @@ async def spa_fallback(request: Request) -> FileResponse | JSONResponse:
     return FileResponse(INDEX_HTML)
 
 
-def setup_spa(app: FastAPI) -> None:
+def setup_react_routing_assets(app: FastAPI) -> None:
     """
     Подключает раздачу собранного React-приложения к FastAPI.
 

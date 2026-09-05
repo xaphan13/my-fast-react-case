@@ -9,7 +9,6 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
-from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from PIL import Image
 from pydantic import BaseModel
@@ -17,6 +16,20 @@ from sqlalchemy import select
 
 from config_log import logF
 from db_core.db_async import CurrentSession
+from md_articles.auth_middleware_helpers import (
+    _ERROR_EMAIL_TAKEN,
+    _ERROR_USERNAME_TAKEN,
+    _ensure_csrf_token,
+    _get_request_user,
+    _validation_response,
+    hash_password,
+    login_user,
+    logout_user,
+    require_login_api,
+    validate_csrf_form,
+    validate_csrf_header,
+    verify_password,
+)
 from md_articles.models import BlogUser
 from md_articles.schema_art import (
     ArticleLang,
@@ -28,12 +41,6 @@ from md_articles.schema_art import (
     save_articles,
     scan_content_art,
     sync_registry_with_disk,
-)
-from md_articles.web_utils import (
-    hash_password,
-    login_user,
-    logout_user,
-    verify_password,
 )
 
 
@@ -95,74 +102,6 @@ def _user_out(user: BlogUser) -> UserOut:
         email=user.email,
         image_file=f"/static/profile_pics/{user.image_file}",
     )
-
-
-def _get_request_user(request: Request) -> BlogUser | None:
-    return getattr(request.state, "current_user", None)
-
-
-def _ensure_csrf_token(request: Request) -> str:
-    """Вернуть существующий CSRF-токен или создать новый в сессии."""
-    token = request.session.get("csrf_token")
-    if not token:
-        import secrets
-
-        token = secrets.token_hex(32)
-        request.session["csrf_token"] = token
-    return token
-
-
-async def validate_csrf_header(request: Request) -> None:
-    """CSRF для JSON POST-роутов: заголовок X-CSRF-Token против сессии."""
-    header_token = request.headers.get("X-CSRF-Token")
-    session_token = request.session.get("csrf_token")
-    if not session_token or not header_token or header_token != session_token:
-        raise HTTPException(status_code=403, detail="CSRF token mismatch")
-
-
-async def validate_csrf_form(request: Request) -> None:
-    """CSRF для multipart /api/blog/account: поле формы csrf_token."""
-    form = await request.form()
-    session_token = request.session.get("csrf_token")
-    form_token = form.get("csrf_token")
-    if not session_token or not form_token or form_token != session_token:
-        raise HTTPException(status_code=403, detail="CSRF token mismatch")
-
-
-async def require_login_api(request: Request) -> None:
-    """Зависимость для API-роутов вместо редиректа — 403 JSON."""
-    if _get_request_user(request) is None:
-        raise HTTPException(status_code=403, detail="Authentication required")
-
-
-_ERROR_EMAIL_TAKEN = "That email is taken. Please choose a different one."
-_ERROR_USERNAME_TAKEN = "That username is taken. Please choose a different one."
-
-
-def _validation_response(errors: dict[str, list[str]]) -> JSONResponse:
-    """Стандартный ответ 422 с errors для форм фронтенда."""
-    return JSONResponse(status_code=422, content={"errors": errors})
-
-
-async def custom_request_validation_exception_handler(
-    request: Request, exc: RequestValidationError
-) -> JSONResponse:
-    """
-    Формат {"errors": {field: [msgs]}} — только для /api/blog;
-    для остальных путей — стандартный ответ FastAPI {"detail": [...]}.
-    """
-    if not request.url.path.startswith("/api/blog"):
-        from fastapi.exception_handlers import request_validation_exception_handler
-
-        return await request_validation_exception_handler(request, exc)
-    errors: dict[str, list[str]] = {}
-    for err in exc.errors():
-        if err.get("type") == "json_invalid":
-            errors.setdefault("body", []).append("Invalid JSON body.")
-            continue
-        field = ".".join(str(loc) for loc in err.get("loc", []) if loc != "body")
-        errors.setdefault(field or "body", []).append(err.get("msg", "Invalid value."))
-    return JSONResponse(status_code=422, content={"errors": errors})
 
 
 def _is_valid_email(email: str) -> bool:

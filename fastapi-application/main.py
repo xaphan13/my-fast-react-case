@@ -9,8 +9,8 @@ from api import router_api
 from ex_user_post.router_users import r_users_sql
 from ex_order_product.router_order_one import r_order_one
 
-from md_articles import register_md_articles
-from frontend_spa import setup_spa
+from md_articles import setup_auth_static_include
+from frontend_routing import setup_react_routing_assets
 
 
 # ── сборка приложения: только API-роутеры ─────────────────────────────────────
@@ -20,12 +20,12 @@ main_app.include_router(router_api)
 main_app.include_router(r_users_sql)
 main_app.include_router(r_order_one)
 
-# Подключаем блог md_articles (middleware + static + JSON API)
-register_md_articles(main_app)
+# Подключаем блог md_articles (auth middleware + static + JSON API)
+setup_auth_static_include(main_app)
 
-# ── SPA (React): монтирование /assets + catch-all, строго после роутеров ──────
-# Подробности — в frontend_spa.py и docs/13_frontend_spa_module.md.
-setup_spa(main_app)
+# ── React: монтирование /assets + catch-all, строго после роутеров ────────────
+# Подробности — в frontend_routing.py и docs/13_frontend_spa_module.md.
+setup_react_routing_assets(main_app)
 
 
 def main() -> None:

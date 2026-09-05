@@ -1,129 +1,21 @@
 """
-Подключение блога `md_articles` к FastAPI как plug-in.
+Пакет блога `md_articles`.
 
-Что в этом пакете:
-  - `__init__.py` (этот файл) — публичный API подключения: middleware
-    current_user, регистрация блога, монтирование `/static` (аватары).
+  - `frontend_auth_include.py` — публичный API подключения:
+    `setup_auth_static_include(app)` (вызывается из `main.py`).
+  - `auth_middleware_helpers.py` — вся авторизация в одном файле:
+    `auth_add_middleware`, `inject_current_user_middleware`, CSRF,
+    `require_login_api`, сессионные и парольные хелперы, exception
+    handler для `RequestValidationError`.
   - `api_blog.py` — JSON-роутер `/api/blog/*` (13 эндпоинтов) для
     React SPA: csrf, current_user, register/login/logout, account,
-    sections, articles, art_manage.
+    sections, articles, art_manage. Здесь же живут `UserOut` и
+    `_user_out` — формат JSON-ответа авторизации/аккаунта.
   - `schema_art.py` — pydantic-модель `ArticleLang` + YAML-реестр
     статей с mtime-кэшем и атомарной записью.
   - `models.py` — SQLAlchemy-модели `BlogUser`, `BlogPost`.
-  - `web_utils.py` — `get_current_user`, `login_user`/`logout_user`,
-    bcrypt-хелперы `hash_password`/`verify_password`.
 """
 
-from fastapi import FastAPI, Request
-from fastapi.staticfiles import StaticFiles
-from starlette.middleware.sessions import SessionMiddleware
+from md_articles.frontend_auth_include import setup_auth_static_include
 
-from base_dir_path import BASE_DIR
-from config_log import logF
-from core.config import settings
-from db_core.db_async import db_manager
-
-from md_articles.api_blog import (
-    custom_request_validation_exception_handler,
-    router_blog_api,
-)
-from md_articles.web_utils import get_current_user
-from fastapi.exceptions import RequestValidationError
-
-
-async def inject_current_user_middleware(request: Request, call_next):
-    """
-    HTTP-middleware: подгружает current_user для каждого запроса.
-
-    Что делает:
-      Открывает короткую сессию БД через `db_manager.session_factory()`,
-      вызывает `get_current_user(request, session)` — функция из
-      `web_utils.py`, которая по `request.session['user_id']` достаёт
-      `BlogUser` из БД и кладёт его в `request.state.current_user`.
-      Затем передаёт управление дальше по цепочке.
-
-    Почему middleware, а не dependency:
-      `request.state.current_user` нужен **всем** обработчикам блога
-      (и `/api/blog/articles`, и `/api/blog/current_user`, и сам
-      exception-handler) и желательно без явной зависимости в каждом
-      `@router.get(...)`. Middleware гарантирует, что к моменту
-      вызова роута `request.state.current_user` либо `None`, либо
-      `BlogUser`. Это убирает повторяющийся `Depends(get_current_user)`
-      в каждом эндпоинте.
-
-    Особенности:
-      - Сессия открывается **на каждый запрос** и закрывается по
-        выходу из `async with` — расход соединений линейный, но для
-        блога с низкой нагрузкой это приемлемо. Если будет узкое
-        место — переезжаем на пул сессий в `request.state`.
-      - `get_current_user` ловит «сессия без user_id» (анонимный
-        пользователь) и кладёт `None` в state — не нужно проверять
-        в каждом роуте «а есть ли вообще ключ».
-    """
-    async with db_manager.session_factory() as session:
-        await get_current_user(request, session)
-        response = await call_next(request)
-    return response
-
-
-def register_md_articles(app: FastAPI) -> None:
-    """
-    Подключает блог к FastAPI: middleware, сессии, статика, JSON-роутер.
-
-    Это plug-in, вызываемый из `main.py` сразу после трёх доменных
-    `include_router` и до `setup_spa(main_app)`. Делает четыре вещи —
-    в строгом порядке, потому что порядок здесь важен (см. ниже):
-
-      1. `app.middleware("http")(inject_current_user_middleware)`
-         — добавляет HTTP-middleware, описанную выше. Должно быть
-         добавлено **до** регистрации роутера, чтобы к моменту
-         вызова любого эндпоинта блога `request.state.current_user`
-         уже был заполнен.
-
-      2. `app.add_middleware(SessionMiddleware, secret_key=..., max_age=...)`
-         — сессии на основе `itsdangerous`-подписанных cookie. Без
-         этой middleware `request.session` в обработчиках бросит
-         `AttributeError`. `secret_key` берётся из `settings.web`,
-         `max_age` = 14 дней — соответствует типичной UX-норме
-         «помнить две недели».
-
-      3. `app.mount("/static", StaticFiles(...))` — отдаёт аватары
-         из `BASE_DIR/static/profile_pics/`. `check_dir=False` —
-         приложение стартует и без каталога (см. `frontend_spa.py`,
-         аналогичный приём).
-
-      4. `app.add_exception_handler(RequestValidationError, ...)`
-         и `app.include_router(router_blog_api)` — JSON-роутер
-         блога + кастомный обработчик 422 для красивых сообщений
-         валидации.
-
-    Подключается из `main.py` после доменных `include_router` и до
-    `setup_spa(main_app)`. Порядок включения middleware относительно
-    `include_router` не критичен — middleware в Starlette оборачивают
-    весь стек ASGI, — но семантически опасно: если переставить вызов
-    или забыть его, роутеры блога (`/api/blog/*`) не зарегистрируются.
-    Доменные роутеры `request.session` не используют, поэтому текущий
-    порядок безопасен.
-    """
-    logF.info("register_md_articles: подключение middleware, static, router_blog_api")
-
-    app.middleware("http")(inject_current_user_middleware)
-
-    app.add_middleware(
-        SessionMiddleware,
-        secret_key=settings.web.secret_key,
-        max_age=14 * 24 * 3600,
-    )
-
-    app.mount(
-        "/static",
-        StaticFiles(directory=BASE_DIR / "static", check_dir=False),
-        name="static",
-    )
-
-    app.add_exception_handler(
-        RequestValidationError,
-        custom_request_validation_exception_handler,
-    )
-
-    app.include_router(router_blog_api)
+__all__ = ["setup_auth_static_include"]
