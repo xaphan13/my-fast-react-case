@@ -17,9 +17,8 @@
 8. [Почему выбран именно этот способ](#8-почему-выбран-именно-этот-способ)
 9. [Сравнение с альтернативами: JWT, OAuth2, серверные сессии](#9-сравнение-с-альтернативами-jwt-oauth2-серверные-сессии)
 10. [Преимущества и недостатки выбранного решения](#10-преимущества-и-недостатки-выбранного-решения)
-11. [Исторический контекст: порт с Flask](#11-исторический-контекст-порт-с-flask)
-12. [Наблюдения и потенциальные улучшения](#12-наблюдения-и-потенциальные-улучшения)
-13. [Приложение: карта файлов авторизации](#13-приложение-карта-файлов-авторизации)
+11. [Наблюдения и потенциальные улучшения](#11-наблюдения-и-потенциальные-улучшения)
+12. [Приложение: карта файлов авторизации](#12-приложение-карта-файлов-авторизации)
 
 ---
 
@@ -27,8 +26,7 @@
 
 В проекте используется **классическая аутентификация на подписанных cookie-сессиях**
 (Starlette `SessionMiddleware`) с паролями, хешированными **bcrypt**, и **CSRF-токенами**
-для всех изменяющих состояние запросов. Это осознанный порт стека
-**Flask-Login + Flask-WTF** (исходный блог `templates_flaskblog/`) на FastAPI/React.
+для всех изменяющих состояние запросов.
 
 Ключевые факты:
 
@@ -56,7 +54,7 @@
 
 Это соответствует учебной цели проекта: демонстрационные роуты должны работать «из
 коробки» без логина, а блог — показывать полноценный цикл аутентификации как в реальном
-приложении (порт flask-blog-1, см. `docs/11_md_articles.md`).
+приложении. Подробности по архитектуре блога — в `docs/11_md_articles.md`.
 
 ---
 
@@ -68,22 +66,28 @@ Starlette `SessionMiddleware` реализует паттерн **client-side se
 сессии сериализуется, подписывается HMAC с `secret_key` и целиком кладётся в cookie
 `session`. Сервер ничего не хранит — «база сессий» находится у клиента в браузере.
 
-Подключение — `fastapi-application/md_articles/__init__.py`, вызывается из
-`create_app()`:
+Подключение — `fastapi-application/md_articles/frontend_auth_include.py`,
+вызывается из `main.py`:
 
 ```python
-def register_md_articles(app: FastAPI) -> None:
-    """Подключение блога: сессии, current_user, статика, JSON API роутер."""
-    logF.info("register_md_articles: подключение middleware, static, router_blog_api")
+def setup_auth_static_include(app: FastAPI) -> None:
+    """Подключает блог к FastAPI: авторизация, статика, JSON-роутер."""
+    logF.info("setup_auth_static_include: подключение auth, /static, router_blog_api")
 
-    app.middleware("http")(inject_current_user_middleware)
+    auth_add_middleware(app)
 
-    app.add_middleware(
-        SessionMiddleware,
-        secret_key=settings.web.secret_key,
-        max_age=14 * 24 * 3600,      # 14 дней
+    app.mount(
+        "/static",
+        StaticFiles(directory=BASE_DIR / "static", check_dir=False),
+        name="static",
     )
+
+    app.include_router(router_blog_api)
 ```
+
+Точка входа авторизации — `auth_add_middleware(app)` в `auth_middleware_helpers.py`:
+добавляет `SessionMiddleware` (14 дней, подпись HMAC `secret_key`) и HTTP-middleware
+`inject_current_user_middleware`.
 
 Секретный ключ подписи — из вложенной pydantic-модели конфигурации
 (`fastapi-application/core/config.py`):
@@ -167,9 +171,9 @@ async def logout_api(request: Request):
 
 ## 5. Разбор кода по слоям
 
-### 5.1. Слой утилит сессии — `md_articles/web_utils.py`
+### 5.1. Слой утилит сессии — `md_articles/auth_middleware_helpers.py`
 
-Ядро аутентификации — четыре функции + зависимость, весь файл ~50 строк:
+Ядро аутентификации — четыре функции + зависимость, в одном файле:
 
 ```python
 async def get_current_user(
@@ -214,11 +218,11 @@ def verify_password(password: str, hashed: str) -> bool:
    `_get_request_user(request)` — нет повторных запросов к БД и нет дублирования
    логики загрузки.
 
-### 5.2. Middleware — `md_articles/__init__.py`
+### 5.2. Middleware — `md_articles/auth_middleware_helpers.py`
 
 ```python
 async def inject_current_user_middleware(request: Request, call_next):
-    """Middleware: загружает current_user для всех HTTP-запросов в блоге."""
+    """HTTP-middleware: подгружает current_user для каждого запроса."""
     async with db_manager.session_factory() as session:
         await get_current_user(request, session)
         response = await call_next(request)
@@ -233,7 +237,7 @@ async def inject_current_user_middleware(request: Request, call_next):
 
 ```python
 class BlogUser(Base):
-    """Пользователь блога (порт UserMixin из Flask-Login)."""
+    """Пользователь блога (атрибут is_authenticated для совместимости)."""
 
     __tablename__ = "blog_user"
 
@@ -257,9 +261,9 @@ class BlogUser(Base):
 
 - `password: str_len_60` — ровно 60 символов, это длина стандартного bcrypt-хеша
   (`$2b$12$` + соль + хеш). В БД **нет** открытых паролей.
-- `is_authenticated` — прямой реликт Flask-Login (`UserMixin`): в Jinja-шаблонах
-  старой версии использовался `{% if current_user.is_authenticated %}`. Свойство
-  сохранено для совместимости, хотя JSON API его не использует.
+- `is_authenticated` — стандартное свойство для шаблонов форм: всегда `True` для
+  реального объекта. Свойство не используется JSON API, но оставлено как часть
+  контракта объекта пользователя для совместимости с фронтенд-формами.
 - Уникальность `username` и `email` обеспечивается и на уровне БД (`unique=True`),
   и предварительной проверкой в API (`_username_exists` / `_email_exists`).
 
@@ -319,7 +323,7 @@ async def register_api(
   такой формат ошибок по полям (обрабатывает его `custom_request_validation_exception_handler`
   и страницы форм).
 - **Регистрация не логинит автоматически** — пользователь должен войти отдельно
-  (поведение исходного Flask-блога сохранено один в один).
+  (явное требование дизайна: разделить «создание аккаунта» и «вход»).
 - **Защита от повторной регистрации под своей сессией**: `Already authenticated` → 400.
 
 ### 5.5. Вход — `api_blog.py::login_api`
@@ -382,7 +386,8 @@ class LoginIn(BaseModel):
   bcrypt не вызывается. (Строго говоря, это создаёт timing-различие «существует ли
   email» — классический ответ на это, фиктивный хеш, здесь не применяется.)
 - **`remember` принимается, но не используется** — срок сессии всегда 14 дней
-  (`max_age` в middleware). Реликт формы Flask-WTF.
+  (`max_age` в middleware). Поле в схеме оставлено для совместимости с фронтенд-формой,
+  но сервер его игнорирует (см. `12` наблюдений ниже).
 
 ### 5.6. Клиентская часть — `frontend/src/api/client.ts`
 
@@ -549,7 +554,7 @@ fetch-обработчика фронтенд не увидит как реди�
 
 - Ролей нет: **любой** вошедший пользователь может открыть `/api/blog/art_manage`
   и править YAML-реестр статей (`add_all`, `meta`). Для учебного блога это
-  соответствует исходному Flask-приложению.
+  приемлемый компромисс — граница «гость vs вошедший» достаточна для демонстрации.
 - «Владелец ресурса» не проверяется: статьи не привязаны к автору через API
   управления — реестр общий.
 - Единственная проверка идемпотентности пользователя — `Already authenticated`
@@ -559,28 +564,13 @@ fetch-обработчика фронтенд не увидит как реди�
 
 ## 8. Почему выбран именно этот способ
 
-### 8.1. Главная причина: это порт
+### 8.1. Главная причина: минимальная зависимость от внешних прокси
 
-Проект эволюционировал flask-blog-1 → Jinja2 → React (архивы `tasks/001-*`,
-`tasks/002-*`). Исходный Flask-блог использовал:
-
-- **Flask-Login** — `login_user()`, `current_user`, `@login_required`;
-- **Flask-WTF** — формы с CSRF-токеном в скрытом поле.
-
-Порт сохраняет **архитектуру и поведение один в один**, меняя только механику:
-
-| Flask-Login / Flask-WTF | Этот проект |
-|---|---|
-| `login_user(user)` | `login_user(request, user.id)` — `request.session["user_id"]` |
-| `current_user` (LocalProxy) | `request.state.current_user` (middleware) |
-| `@login_required` → redirect `/login` | `Depends(require_login_api)` → 403 JSON (SPA!) |
-| `form.hidden_tag()` (CSRF в форме) | `X-CSRF-Token` / поле `csrf_token` |
-| Серверное хранилище сессий (cookie + secret_key) | `SessionMiddleware` (cookie + `secret_key`) |
-| `werkzeug.security` (PBKDF2) | `bcrypt` напрямую |
-
-Это подтверждается и артефактами совместимости в коде: свойство
-`BlogUser.is_authenticated` с комментарием «Совместимость с UserMixin»,
-`flash(request, ...)`-механика в `web_utils` старого Jinja-слоя.
+Cookie-сессия на одном origin — это **нулевая инфраструктура вокруг** (нет Redis
+для хранения сессий, нет провайдера OAuth2, нет refresh-токенов и JWT-валидации).
+`SessionMiddleware` из Starlette + `bcrypt` из зависимостей покрывают весь цикл:
+вход → хеш → сессия → проверка → логаут. Для учебного проекта, где инфраструктура
+должна запускаться одной командой `uvicorn`, это решающий фактор.
 
 ### 8.2. Вторая причина: SPA + same-origin
 
@@ -595,7 +585,7 @@ fetch-обработчика фронтенд не увидит как реди�
 ### 8.3. Третья причина: учебная наглядность
 
 Проект — «исполняемый каталог приёмов». Свой маленький, читаемый за 50 строк слой
-авторизации (`web_utils.py`) показывает механику лучше, чем готовая библиотека
+авторизации (`auth_middleware_helpers.py`) показывает механику лучше, чем готовая библиотека
 (fastapi-users и т.п.): видно, где ставится `user_id`, где проверяется пароль,
 где валидируется CSRF. Никакой магии.
 
@@ -632,8 +622,7 @@ origin один, микросервисов нет.
 
 ### 9.3. Почему не OAuth2 / внешний IdP
 
-- Нет внешних провайдеров в требованиях; регистрация — email+пароль, как в исходном
-  Flask-блоге.
+- Нет внешних провайдеров в требованиях; регистрация — email+пароль.
 - OAuth2-схема в Swagger (`utils/docs.py`) — только оформление кнопки Authorize
   в `/docs`, реального flows нет.
 - Обучение: собственный цикл «register → login → session → logout» нагляднее
@@ -646,8 +635,7 @@ origin один, микросервисов нет.
   зрелый пакет `bcrypt`, две строки кода.
 - **argon2** — современнее (победитель PHC), но требует отдельного пакета и не даёт
   практической выгоды для учебного проекта.
-- **pbkdf2** (шёл из `werkzeug` в исходном Flask) — приемлем, но bcrypt сильнее
-  против GPU-перебора.
+- **pbkdf2** — приемлем, но bcrypt сильнее против GPU-перебора.
 - Хеш укладывается в `str_len_60` — стандартный формат `$2b$...`, миграции не нужны.
 
 ---
@@ -656,7 +644,7 @@ origin один, микросервисов нет.
 
 ### 10.1. Преимущества (что так даёт именно cookie-сессия + bcrypt + CSRF)
 
-1. **Минимальный объём кода и зависимостей.** Весь слой — `web_utils.py` (50 строк)
+1. **Минимальный объём кода и зависимостей.** Весь слой — `auth_middleware_helpers.py` (~140 строк)
    + функции-валидаторы в `api_blog.py`. Ни fastapi-users, ни itsdangerous-обвязки,
    ни хранилища сессий: `SessionMiddleware` и `bcrypt` уже в зависимостях.
 2. **Мгновенный отзыв и консистентность.** `get_current_user` перечитывает
@@ -705,7 +693,7 @@ origin один, микросервисов нет.
 
 ### 10.3. Сводка «почему так»
 
-Совокупность условий — учебный порт Flask-блога, один origin, одна БД, отсутствие
+Совокупность условий — учебный проект, один origin, одна БД, отсутствие
 микросервисов, желание показать механику явно — делает cookie-сессию оптимальным
 выбором: JWT решал бы здесь несуществующие проблемы и добавил бы код, серверные
 сессии добавили бы инфраструктуру, OAuth2 — внешнюю зависимость от провайдера.
@@ -715,29 +703,7 @@ origin один, микросервисов нет.
 
 ---
 
-## 11. Исторический контекст: порт с Flask
-
-Исходник — `templates_flaskblog/` (Flask-блог, только образец, не трогается).
-Соответствие механизмов:
-
-| Flask (исходник) | Этот проект | Где в коде |
-|---|---|---|
-| `Flask-Login: login_user(user)` | `login_user(request, user.id)` | `md_articles/web_utils.py:34` |
-| `Flask-Login: current_user` | `request.state.current_user` | middleware в `md_articles/__init__.py:24` |
-| `@login_required` (redirect) | `Depends(require_login_api)` (403 JSON) | `md_articles/api_blog.py:131` |
-| `werkzeug.security.generate_password_hash` | `hash_password` (bcrypt) | `md_articles/web_utils.py:45` |
-| `Flask-WTF: form.hidden_tag()` | `validate_csrf_header` / `validate_csrf_form` | `md_articles/api_blog.py:114,122` |
-| `flash()` + Bootstrap-категории | `{"message", "category"}` в JSON | ответы login/register/logout |
-| Серверная сессия Flask | `SessionMiddleware` (клиентская, подписанная) | `md_articles/__init__.py:41` |
-
-Наследие, оставшееся в коде:
-
-- `BlogUser.is_authenticated` — совместимость с `UserMixin` (`models.py:41`);
-- поле `remember` в `LoginIn` — реликт формы Flask-WTF.
-
----
-
-## 12. Наблюдения и потенциальные улучшения
+## 11. Наблюдения и потенциальные улучшения
 
 Ниже — не дефекты, а точки роста, если проект когда-нибудь выйдет за рамки учебного:
 
@@ -756,36 +722,32 @@ origin один, микросервисов нет.
 
 ---
 
-## 13. Приложение: карта файлов авторизации
+## 12. Приложение: карта файлов авторизации
 
 ```
 fastapi-application/
-├── core/config.py                      # WebConfig.secret_key (подпись cookie)
+├── core/config.py                       # WebConfig.secret_key (подпись cookie)
 ├── md_articles/
-│   ├── __init__.py                     # register_md_articles(): SessionMiddleware,
-│   │                                   #   inject_current_user_middleware, роутер
-│   ├── web_utils.py                    # get_current_user, login_user, logout_user,
-│   │                                   #   hash_password, verify_password (bcrypt)
-│   ├── models.py                       # BlogUser (blog_user): password = bcrypt-хеш
-│   ├── api_blog.py                     # JSON API: /csrf /register /login /logout
-│   │                                   #   /account; require_login_api; validate_csrf_*
+│   ├── frontend_auth_include.py         # setup_auth_static_include(): middleware + static + router
+│   ├── auth_middleware_helpers.py       # auth_add_middleware, current_user-middleware,
+│   │                                    #   CSRF-хелперы, hash_password/verify_password (bcrypt)
+│   ├── models.py                        # BlogUser (blog_user): password = bcrypt-хеш
+│   └── api_blog.py                      # JSON API: /csrf /register /login /logout
+│                                        #   /account; require_login_api; validate_csrf_*
 frontend/src/api/
-├── client.ts                           # credentials:'include', getCsrfToken,
-│                                       #   postJson (X-CSRF-Token), postMultipart (поле)
-└── auth.ts                             # login/register/logout/account поверх client.ts
+├── client.ts                            # credentials: 'include', getCsrfToken,
+│                                        #   postJson (X-CSRF-Token), postMultipart (поле)
+└── auth.ts                              # login/register/logout/account поверх client.ts
 ```
 
-Ключевые строки для быстрой навигации:
+Ключевые места для быстрой навигации:
 
-| Что | Файл | Строки |
-|---|---|---|
-| Подключение `SessionMiddleware` (14 дней) | `md_articles/__init__.py` | 41–45 |
-| Middleware `current_user` | `md_articles/__init__.py` | 24–29 |
-| Сессия: login/logout/get_current_user | `md_articles/web_utils.py` | 16–39 |
-| bcrypt-хеши | `md_articles/web_utils.py` | 45–50 |
-| Модель `BlogUser` | `md_articles/models.py` | 20–46 |
-| CSRF: генерация + 2 валидатора | `md_articles/api_blog.py` | 104–128 |
-| `require_login_api` (403) | `md_articles/api_blog.py` | 131–134 |
-| Логин (bcrypt + сессия) | `md_articles/api_blog.py` | 297–334 |
-| Логаут | `md_articles/api_blog.py` | 337–341 |
-| Клиент: cookie + CSRF | `frontend/src/api/client.ts` | 30, 46–75 |
+| Что | Файл |
+|---|---|
+| Подключение блога (middleware + static + JSON API) | `md_articles/frontend_auth_include.py::setup_auth_static_include` |
+| `auth_add_middleware`: `SessionMiddleware` + current_user-middleware + exception handler | `md_articles/auth_middleware_helpers.py::auth_add_middleware` |
+| Сессия: login/logout/get_current_user + bcrypt | `md_articles/auth_middleware_helpers.py` (login_user/logout_user/get_current_user, hash_password/verify_password) |
+| CSRF: генерация + 2 валидатора | `md_articles/auth_middleware_helpers.py::_ensure_csrf_token`, `validate_csrf_header`, `validate_csrf_form` |
+| `require_login_api` (403) | `md_articles/auth_middleware_helpers.py::require_login_api` |
+| Логин/регистрация/логаут | `md_articles/api_blog.py` |
+| Клиент: cookie + CSRF | `frontend/src/api/client.ts` |

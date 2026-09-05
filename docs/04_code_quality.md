@@ -46,7 +46,7 @@
 
 **Блог (`md_articles/` + `frontend/`) — самая зрелая часть проекта.** Что сделано правильно:
 
-1. Пароли хешируются bcrypt (`web_utils.py`), пароль никогда не возвращается клиенту (`UserOut` без поля `password`) — прямой контраст с доменом `users` (P1-1).
+1. Пароли хешируются bcrypt (`auth_middleware_helpers.py`), пароль никогда не возвращается клиенту (`UserOut` без поля `password`) — прямой контраст с доменом `users` (P1-1).
 2. CSRF: двойной токен в сессии, заголовок `X-CSRF-Token` для JSON-запросов и поле формы для multipart; проверка на каждом state-changing эндпоинте.
 3. Реестр статей: mtime-кэш с last-good-state (битый `articles.yaml` не ломает работающий блог) и атомарная запись через tempfile + `os.replace` — нет окна с полусломанным файлом.
 4. Уникальность username/email проверяется явными `SELECT`-запросами до вставки, ошибки возвращаются полем — нет проблемы `IntegrityError` → 500 (P2-6).
@@ -216,9 +216,10 @@ def validate_path_is_even(cls, v: int) -> int:
 
 Нарушение `UniqueConstraint` (дублирующийся `nickname` в `POST /users/create_user`, дублирующаяся пара в `OrderProductAssociation`) даёт **500** вместо `409`. В блоге проблемы нет — уникальность проверяется до вставки; здесь дефект остаётся актуальным.
 
-### Дефекты миграции на React (наследие удаления Jinja)
+### Дефекты миграции блога на SPA (исторический контекст)
 
-Обнаружены при ревизии кодовой базы после миграции блога на SPA (задание `tasks/003-react-blog-migration/`):
+Часть наблюдений зафиксирована при ревизии после перевода блога на SPA
+(см. закрытые задания `tasks/NNN-*`):
 
 - **Дубликат компонента.** `frontend/components/Toast.tsx` (вне `src/`) — копия рабочего `frontend/src/components/Toast.tsx`; Vite его не собирает, но файл «живёт» вне зоны сборки и рассинхронизируется.
 - **Сессия БД на каждый запрос.** `inject_current_user_middleware` открывает `AsyncSession` и делает `SELECT blog_user` на **все** HTTP-запросы, включая `/docs`, статику, `/assets` и SPA catch-all, где пользователь не нужен. Для учебного проекта приемлемо, в проде — расход пула впустую.
@@ -235,7 +236,7 @@ def validate_path_is_even(cls, v: int) -> int:
 | Закомментированный код как переключатель | `core/config.py:91-92` | Профиль БД выбирается комментированием строки, а не переменной окружения |
 | Закомментированные альтернативы | `cls_deps.py`, `dep_examp_cls.py`, `config_log.py` | Варианты `Depends(...)`, четыре неиспользуемых форматтера, блок логгеров uvicorn |
 | Мёртвый код | `cls_deps.py:48`, `cls_deps.py:92` | `path_reader` и `access_required` создаются на уровне модуля, но в роутах закомментированы |
-| Мёртвый код | `md_articles/routes_{main,users,articles}.py` | Jinja-роутеры остались после миграции на React: не импортируются и ссылаются на удалённые `flash`/`render_template` |
+| Мёртвый код | `md_articles/routes_{main,users,articles}.py` | Удалены в задании 014 (были неиспользуемыми серверными роутерами блога старого образца) |
 | Мёртвый код | `frontend/components/Toast.tsx` | Копия рабочего `src/components/Toast.tsx` вне зоны сборки Vite |
 | Мёртвый код | `utils/docs.py` | `reg_docs_routes` не вызывается: `create_app(custom_docs_url=False)` |
 | Магические значения | `router_order_one.py`, `cls_deps.py` | Индексы `[0]`/`[1]`, токены `"qwerty-abc"`, `"foo-bar-fizz-buzz"` |
@@ -275,7 +276,7 @@ def validate_path_is_even(cls, v: int) -> int:
 
 ### Критично
 
-**Пароли в открытом виде (домен `users`).** Хеширования нет: `User.password` — `Mapped[str_len_50 | None]`, `crud_users.create_user` сохраняет значение как получено. В сочетании с P1-1 (пароль в ответе API) это полная компрометация учётных данных. Нужен `passlib`/`argon2` или `bcrypt`. В блоге сделано правильно — bcrypt в `web_utils.py`, — что подчёркивает непоследовательность домена `users`.
+**Пароли в открытом виде (домен `users`).** Хеширования нет: `User.password` — `Mapped[str_len_50 | None]`, `crud_users.create_user` сохраняет значение как получено. В сочетании с P1-1 (пароль в ответе API) это полная компрометация учётных данных. Нужен `passlib`/`argon2` или `bcrypt`. В блоге сделано правильно — bcrypt в `auth_middleware_helpers.py`, — что подчёркивает непоследовательность домена `users`.
 
 **Секреты в репозитории.** В `.gitignore` строки `#*.env` и `#.env` **закомментированы**, поэтому `prod_db.env` и `dev_sqlite.env` закоммичены. `prod_db.env` содержит `postgresql+asyncpg://user:password@localhost:5432/shop` — строка подключения с парой логин/пароль находится в истории git. Удаление файла не поможет: нужна перезапись истории и ротация пароля.
 
@@ -337,7 +338,7 @@ def validate_path_is_even(cls, v: int) -> int:
 | 14 | `ECHO=1` в обоих профилях | `prod_db.env`, `dev_sqlite.env` | P2 |
 | 15 | Логи uvicorn не в файле | `config_log.py` | P2 |
 | 16 | Нет пагинации | `router_users.py`, `router_order_one.py` | P2 |
-| 17 | Мёртвые Jinja-роутеры после миграции | `md_articles/routes_{main,users,articles}.py` | P2 |
+| 17 | Мёртвые серверные роутеры блога старого образца | `md_articles/routes_{main,users,articles}.py` (удалены в задании 014) | P2 (закрыт) |
 | 18 | Сессия БД на каждый запрос | `md_articles/__init__.py` (middleware) | P3 |
 | 19 | CSRF-токен не ротируется; `remember` игнорируется | `md_articles/api_blog.py` | P3 |
 | 20 | Дубликат `Toast.tsx` вне `src/` | `frontend/components/Toast.tsx` | P3 |

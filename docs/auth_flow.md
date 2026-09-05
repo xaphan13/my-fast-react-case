@@ -11,8 +11,8 @@
 **Сервер** (`fastapi-application/`):
 
 ```
-md_articles/__init__.py      # подключение SessionMiddleware + middleware current_user
-md_articles/web_utils.py     # get_current_user, login_user, logout_user, bcrypt
+md_articles/frontend_auth_include.py      # подключение SessionMiddleware + middleware current_user
+md_articles/auth_middleware_helpers.py     # get_current_user, login_user, logout_user, bcrypt
 md_articles/models.py        # BlogUser — таблица blog_user
 md_articles/api_blog.py      # роуты /api/blog/*, csrf, require_login_api
 ```
@@ -28,19 +28,22 @@ auth.ts                      # login/register/logout/account поверх client
 
 ## 1. Приложение поднимает сессии и middleware
 
-`md_articles/__init__.py` — функция `register_md_articles`, вызывается из `main.py`.
+`md_articles/frontend_auth_include.py` — функция `setup_auth_static_include`,
+вызывается из `main.py`:
 
 ```python
-# md_articles/__init__.py:108-116
-logF.info("register_md_articles: подключение middleware, static, router_blog_api")
+def setup_auth_static_include(app: FastAPI) -> None:
+    logF.info("setup_auth_static_include: подключение auth, /static, router_blog_api")
 
-app.middleware("http")(inject_current_user_middleware)
+    auth_add_middleware(app)
 
-app.add_middleware(
-    SessionMiddleware,
-    secret_key=settings.web.secret_key,
-    max_age=14 * 24 * 3600,   # 14 дней
-)
+    app.mount(
+        "/static",
+        StaticFiles(directory=BASE_DIR / "static", check_dir=False),
+        name="static",
+    )
+
+    app.include_router(router_blog_api)
 ```
 
 `SessionMiddleware` подключает `request.session` — это подписанная HMAC-cookie
@@ -267,10 +270,10 @@ class BlogUser(Base):
 
 ## 7. Что делает `login_user`
 
-`md_articles/web_utils.py`:
+`md_articles/auth_middleware_helpers.py`:
 
 ```python
-# md_articles/web_utils.py:34-36
+# md_articles/auth_middleware_helpers.py:34-36
 def login_user(request: Request, user_id: int) -> None:
     request.session["user_id"] = user_id
 ```
@@ -283,7 +286,7 @@ def login_user(request: Request, user_id: int) -> None:
 `logout_user` ровно обратный:
 
 ```python
-# md_articles/web_utils.py:38-39
+# md_articles/auth_middleware_helpers.py:38-39
 def logout_user(request: Request) -> None:
     request.session.pop("user_id", None)
 ```
@@ -304,11 +307,11 @@ async def logout_api(request: Request):
 
 ## 8. Каждый следующий запрос: middleware читает сессию
 
-`md_articles/web_utils.py::get_current_user` — то, что выполняется на **каждом**
+`md_articles/auth_middleware_helpers.py::get_current_user` — то, что выполняется на **каждом**
 HTTP-запросе к блогу (через middleware из шага 1):
 
 ```python
-# md_articles/web_utils.py:16-26
+# md_articles/auth_middleware_helpers.py:16-26
 async def get_current_user(
     request: Request,
     session: CurrentSession,
@@ -324,7 +327,7 @@ async def get_current_user(
     return user
 ```
 
-Middleware, который это вызывает (`md_articles/__init__.py:32-67`):
+Middleware, который это вызывает (`md_articles/frontend_auth_include.py:32-67`):
 
 ```python
 async def inject_current_user_middleware(request: Request, call_next):
@@ -417,8 +420,8 @@ login (POST /api/blog/login)
     │
     ├── validate_csrf_header       api_blog.py:116
     ├── SELECT BlogUser WHERE email
-    ├── bcrypt.checkpw             web_utils.py:49
-    └── request.session["user_id"] = user.id     web_utils.py:34
+    ├── bcrypt.checkpw             auth_middleware_helpers.py:80
+    └── request.session["user_id"] = user.id     auth_middleware_helpers.py:67
                                           │
                                           ▼
             Set-Cookie: session=<подписано: {user_id, csrf_token}>
@@ -452,10 +455,10 @@ login (POST /api/blog/login)
 ```
 
 **Где «создаётся токен»:** `login_user(request, user.id)` в
-`web_utils.py:34` (одна строка после bcrypt-проверки).
+`auth_middleware_helpers.py:67` (одна строка после bcrypt-проверки).
 
 **Куда сохраняется:** в подписанную cookie `session` через Starlette
-`SessionMiddleware` (`md_articles/__init__.py:111-116`).
+`SessionMiddleware` (`md_articles/auth_middleware_helpers.py::auth_add_middleware`).
 
 **Как попадает во фронт:** через `Set-Cookie` в ответе сервера, браузер
 запоминает автоматически.
@@ -464,7 +467,7 @@ login (POST /api/blog/login)
 `credentials: 'include'` в fetch (`client.ts:30`).
 
 **Где проверяется при ограничении доступа:** двухуровнево — middleware
-грузит `BlogUser` в `request.state.current_user` (`web_utils.py:16`), а
+грузит `BlogUser` в `request.state.current_user` (`auth_middleware_helpers.py:46`), а
 `Depends(require_login_api)` отдаёт 403 если state `None`
 (`api_blog.py:133`). Плюс CSRF-валидаторы (`api_blog.py:116/124`) на каждом
 state-changing эндпоинте.

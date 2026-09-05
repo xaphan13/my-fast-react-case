@@ -5,11 +5,11 @@
 контракты с фронтендом и где граница между блогом и остальным FastAPI.
 
 Смежные документы:
-- [`docs/11_md_articles.md`](11_md_articles.md) — отличия этой реализации
-  от исходного Flask-блога.
+- [`docs/11_md_articles.md`](11_md_articles.md) — общий обзор пакета блога
+  с точки зрения фич.
 - [`docs/14_create_fastapi_factory.md`](14_create_fastapi_factory.md) —
-  место `register_md_articles` в общем каркасе приложения (сейчас
-  вызывается из `main.py`, не из `create_app()`).
+  место `setup_auth_static_include` в общем каркасе приложения
+  (вызывается из `main.py`).
 - [`docs/12_fastapi_react_integration.md`](12_fastapi_react_integration.md) —
   как SPA получает данные блога через `/api/blog`.
 
@@ -17,50 +17,40 @@
 
 ```
 md_articles/
-├── __init__.py            # plug-in: register_md_articles + middleware
-├── api_blog.py            # JSON-роутер /api/blog/* (13 эндпоинтов)
-├── schema_art.py          # pydantic ArticleLang + YAML-реестр с mtime-кэшем
-├── models.py              # SQLAlchemy: BlogUser, BlogPost
-├── web_utils.py           # get_current_user, login/logout, bcrypt
-└── articles.yaml          # реестр статей (правит пользователь и фронт через /art_manage)
+├── __init__.py                    # публичный API пакета (реэкспорт setup_auth_static_include)
+├── frontend_auth_include.py       # plug-in: setup_auth_static_include(app) — middleware + static + JSON API
+├── auth_middleware_helpers.py     # вся авторизация: auth_add_middleware, current_user-middleware,
+│                                  #   CSRF-хелперы, hash_password/verify_password, require_login_api
+├── api_blog.py                    # JSON-роутер /api/blog/* (13 эндпоинтов)
+├── schema_art.py                  # pydantic ArticleLang + YAML-реестр с mtime-кэшем
+├── models.py                      # SQLAlchemy: BlogUser, BlogPost
+└── articles.yaml                  # реестр статей (правит пользователь и фронт через /art_manage)
 ```
 
 | Файл | Зона | Что внутри |
 |---|---|---|
-| `__init__.py` | plug-in | `inject_current_user_middleware`, `register_md_articles` (вызывается из `main.py`) |
-| `api_blog.py` | API | роутер `router_blog_api` (prefix `/api/blog`), pydantic-схемы запросов/ответов, CSRF-хелперы, exception-handler для 422 |
+| `__init__.py` | публичный API | реэкспорт `setup_auth_static_include` |
+| `frontend_auth_include.py` | plug-in | `setup_auth_static_include(app)` — подключает блог к FastAPI |
+| `auth_middleware_helpers.py` | безопасность | `auth_add_middleware(app)`, `inject_current_user_middleware`, CSRF-хелперы, `login_user`/`logout_user`, `hash_password`/`verify_password` (bcrypt), `require_login_api` |
+| `api_blog.py` | API | роутер `router_blog_api` (prefix `/api/blog`), pydantic-схемы запросов/ответов, `_user_out` (формат JSON-ответа) |
 | `schema_art.py` | данные | модель `ArticleLang`, чтение/запись `articles.yaml` с mtime-кэшем, рендер `.md` через `markdown()`, сканирование `content_art/` |
 | `models.py` | данные | `BlogUser`, `BlogPost` (SQLAlchemy 2.0, попадают в `Base.metadata` для Alembic) |
-| `web_utils.py` | безопасность | `get_current_user` (dependency по сути), `login_user`/`logout_user`, `hash_password`/`verify_password` (bcrypt) |
 
-## 2. Точка входа — `__init__.py`
+## 2. Точка входа — `frontend_auth_include.py`
 
-`md_articles/__init__.py` — это публичный API пакета. Из него наружу
-смотрят только две вещи:
+Публичный API пакета — единственная функция `setup_auth_static_include(app)`,
+реэкспортированная в `md_articles/__init__.py`. Вызывается из `main.py` после
+доменных `include_router` и до `setup_react_routing_assets(main_app)`.
 
-- `inject_current_user_middleware(request, call_next)` — HTTP-middleware,
-  подгружающая `current_user` на каждый запрос.
-- `register_md_articles(app)` — plug-in, вызываемый из `main.py`
-  после доменных `include_router` и до `setup_spa(main_app)`.
+`setup_auth_static_include` делает три вещи в строгом порядке:
 
-`register_md_articles` делает четыре вещи в строгом порядке:
-
-1. `app.middleware("http")(inject_current_user_middleware)` — middleware
-   добавляется **до** `include_router(router_blog_api)`, чтобы к моменту
-   вызова любого эндпоинта блога `request.state.current_user` уже был
-   заполнен. Доменные роутеры, добавляемые в `main.py` **до** этого
-   вызова, тоже оказываются под этой middleware — Starlette оборачивает
-   ею весь ASGI-стек, порядок `include_router` не важен.
-2. `app.add_middleware(SessionMiddleware, secret_key=..., max_age=14 дней)`
-   — сессии на основе подписанных cookie (Starlette). Без неё
-   `request.session` в обработчиках упадёт.
-3. `app.mount("/static", StaticFiles(...))` — аватары из
-   `BASE_DIR/static/profile_pics/`. `check_dir=False` (аналогично
-   `frontend_spa.py`) позволяет стартовать без каталога.
-4. `app.add_exception_handler(RequestValidationError, ...)` +
-   `app.include_router(router_blog_api)` — JSON-роутер блога и
-   кастомный 422-хендлер с форматом `{"errors": {field: [msgs]}}`,
-   удобным для форм React.
+1. `auth_add_middleware(app)` — подключает всю авторизацию: `SessionMiddleware`
+   (подписанные cookie, 14 дней), `inject_current_user_middleware` и обработчик
+   `RequestValidationError` для формата `{"errors": {field: [msgs]}}`.
+2. `app.mount("/static", StaticFiles(...))` — аватары из
+   `BASE_DIR/static/profile_pics/`. `check_dir=False` (аналогично `frontend_routing.py`)
+   позволяет стартовать без каталога.
+3. `app.include_router(router_blog_api)` — JSON-роутер блога.
 
 ## 3. `inject_current_user_middleware` — почему middleware, а не Depends
 
@@ -235,12 +225,13 @@ SQLAlchemy 2.0 в стиле проекта (`Mapped[]` + `mapped_column` +
 или явный импорт в `db_core`); иначе Alembic не увидит таблицу при
 `--autogenerate`.
 
-Свойство `is_authenticated` — единственная точка совместимости с
-Flask-Login `UserMixin` (для прямого портирования шаблонов Jinja в
-React-эпоху). В React-фронте это не используется, фронт ориентируется
-на наличие/отсутствие `user` в `GET /current_user`.
+Атрибут `is_authenticated` оставлен на объекте пользователя как стандартное
+свойство (Boolean, всегда `True` для реального объекта) — фронтенд-формы
+ожидают такой атрибут на сущности «пользователь». В React-фронте это не
+используется — фронт ориентируется на наличие/отсутствие `user` в
+`GET /current_user`.
 
-## 8. `web_utils.py` — auth-хелперы
+## 8. `auth_middleware_helpers.py` — auth-хелперы
 
 ```python
 async def get_current_user(request, session) -> BlogUser | None:
@@ -266,6 +257,11 @@ async def get_current_user(request, session) -> BlogUser | None:
 `hash_password` / `verify_password` — тонкие обёртки над `bcrypt`.
 `bcrypt.gensalt()` по умолчанию даёт соль нужной сложности;
 `bcrypt.checkpw` сам извлекает соль из хэша.
+
+Файл также содержит CSRF-хелперы (`_ensure_csrf_token`,
+`validate_csrf_header`, `validate_csrf_form`), зависимость
+`require_login_api` (403 JSON для не-залогиненных), и кастомный
+обработчик `RequestValidationError` для формата `{"errors": ...}`.
 
 ## 9. Поток типичного запроса
 
@@ -298,7 +294,7 @@ async def get_current_user(request, session) -> BlogUser | None:
   (не в `md_articles/`). Пакет только читает/рендерит их; класть
   контент внутрь пакета — лишнее связывание.
 - **Аватары** — в `fastapi-application/static/profile_pics/`. Пакет
-  отдаёт их через `mount('/static', ...)` в `__init__.py`, но не
+  отдаёт их через `mount('/static', ...)` в `frontend_auth_include.py`, но не
   управляет файлами (загрузка/ресайз — в `api_blog._save_picture`).
 - **React-фронт** обращается к блогу через `/api/blog/*`. Контракт
   схем и формат ошибок — это «API-документация», которая

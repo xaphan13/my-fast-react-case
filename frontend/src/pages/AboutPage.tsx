@@ -1,5 +1,4 @@
 // Статическая страница «О сайте» — без обращения к API.
-// Суть перенесена со старой Jinja-страницы templates/about.html.
 
 export default function AboutPage() {
   return (

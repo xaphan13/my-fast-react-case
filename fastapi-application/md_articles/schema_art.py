@@ -1,11 +1,9 @@
 # ==============================================================================
 # ++++++++++++++++++++++++ ArticleLang + YAML registry +++++++++++++++++++++++++
-# -------------------- порт new_articles/schema_art.py -------------------------
+# -------------------- pydantic ArticleLang + YAML-реестр -----------------------
 # ------------------------------------------------------------------------------
 import os
-import secrets
 import tempfile
-from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 import yaml

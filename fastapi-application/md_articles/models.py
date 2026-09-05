@@ -18,7 +18,7 @@ from db_core.type_for_models import (
 
 
 class BlogUser(Base):
-    """Пользователь блога (порт UserMixin из Flask-Login)."""
+    """Пользователь блога."""
 
     __tablename__ = "blog_user"
 

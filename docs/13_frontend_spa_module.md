@@ -1,6 +1,6 @@
-# 13. Модуль `frontend_spa.py`: как именно FastAPI раздаёт собранный React
+# 13. Модуль `frontend_routing.py`: как именно FastAPI раздаёт собранный React
 
-Этот документ — про конкретный код в [`frontend_spa.py`](../fastapi-application/frontend_spa.py):
+Этот документ — про конкретный код в [`frontend_routing.py`](../fastapi-application/frontend_routing.py):
 почему он устроен так, как устроен, что делает каждая строка и какие грабли
 ждут при неправильном порядке вызовов.
 
@@ -14,19 +14,19 @@
 `main.py` — это **сборка приложения**: какие роутеры включены, какая фабрика
 `create_app()` вызвана, на каком хосте/порту запускаться. Всё, что касается
 раздачи клиентского HTML и статики фронта, в эту ответственность не входит и
-вынесено в `frontend_spa.py`.
+вынесено в `frontend_routing.py`.
 
 Что это даёт:
 
 - `main.py` остаётся короткой «картой приложения» — не нужно пробираться через
   30 строк, чтобы понять, какие API включены.
 - Отключить SPA целиком (например, для чисто-API-режима) — одна строка:
-  закомментировать `setup_spa(main_app)`. Не нужно искать mount'ы и catch-all
+  закомментировать `setup_react_routing_assets(main_app)`. Не нужно искать mount'ы и catch-all
   по всему `main.py`.
 - Если в проекте появятся другие SPA (админка, документация) — каждая
   подключается своим модулем, без загромождения `main.py`.
 
-## 2. Что делает `setup_spa(app)` — три шага
+## 2. Что делает `setup_react_routing_assets(app)` — три шага
 
 ### Шаг 1. `app.mount('/assets', StaticFiles(...))`
 
@@ -138,17 +138,17 @@ API-путь, например `GET /api/typo`, привёл бы к таком�
 
 ## 3. Пошаговая трассировка запросов
 
-После `setup_spa(main_app)` маршруты в `main_app.router.routes` идут в таком
+После `setup_react_routing_assets(main_app)` маршруты в `main_app.router.routes` идут в таком
 порядке (упрощённо):
 
 1. `/openapi.json`, `/docs`, `/redoc`, `/docs/oauth2-redirect` (utils/docs.py)
 2. `router_api` (9 dep_examples + 4 my_items)
 3. `r_users_sql` (CRUD User/Post)
 4. `r_order_one` (Order)
-5. `router_blog_api` (из `register_md_articles(main_app)` в `main.py`)
+5. `router_blog_api` (из `setup_auth_static_include(main_app)` в `main.py`)
 6. `app.mount('/static', ...)` (аватары из md_articles)
-7. `app.mount('/assets', StaticFiles(...))` ← **setup_spa, шаг 1**
-8. `Route('/{full_path:path}', spa_fallback, methods=['GET'])` ← **setup_spa, шаг 2**
+7. `app.mount('/assets', StaticFiles(...))` ← **setup_react_routing_assets, шаг 1**
+8. `Route('/{full_path:path}', spa_fallback, methods=['GET'])` ← **setup_react_routing_assets, шаг 2**
 
 Что происходит с конкретными запросами:
 
@@ -174,11 +174,11 @@ main_app = create_app(...)          # каркас: FastAPI + lifespan + /docs
 main_app.include_router(router_api)
 main_app.include_router(r_users_sql)
 main_app.include_router(r_order_one)
-register_md_articles(main_app)      # middleware + mount /static + router_blog_api
-setup_spa(main_app)                 # ← СТРОГО после register_md_articles
+setup_auth_static_include(main_app)      # middleware + mount /static + router_blog_api
+setup_react_routing_assets(main_app)                 # ← СТРОГО после setup_auth_static_include
 ```
 
-`setup_spa` дописывает два новых элемента в `router.routes`. Если его вызвать
+`setup_react_routing_assets` дописывает два новых элемента в `router.routes`. Если его вызвать
 **до** `include_router`, добавленные позже роутеры окажутся **после**
 catch-all — и тогда `GET /users/...` сначала попадёт в SPA, а не в API.
 Симптом: `/docs`, `/api/blog/articles`, `/users/get_all_users` отдают
@@ -186,7 +186,7 @@ catch-all — и тогда `GET /users/...` сначала попадёт в SP
 и она не проявляется сразу — браузер показывает SPA как ни в чём не бывало.
 
 Правило: **catch-all всегда последний в `router.routes`**. Любой `mount` или
-`include_router` после `setup_spa` нужно ставить выше catch-all вручную, иначе
+`include_router` после `setup_react_routing_assets` нужно ставить выше catch-all вручную, иначе
 оно не сработает.
 
 ## 5. Dev-режим без `dist/`
@@ -203,11 +203,11 @@ npm run dev   # Vite поднимается на http://localhost:5173
 В этом режиме Vite отдаёт исходники с HMR (правка → мгновенное обновление
 без пересборки), а запросы `/api` и `/static` проксирует на FastAPI
 (`vite.config.ts`). Браузер ходит на :5173, FastAPI обслуживает только API.
-SPA-обвязка из `frontend_spa.py` в этом режиме не задействована: Vite сам
+SPA-обвязка из `frontend_routing.py` в этом режиме не задействована: Vite сам
 является «SPA-сервером», а FastAPI — чистым API.
 
 **Следствие:** `frontend/dist/` в dev-режиме не нужен. Можно вообще его
-удалить — `setup_spa` отработает штатно благодаря `check_dir=False`, просто
+удалить — `setup_react_routing_assets` отработает штатно благодаря `check_dir=False`, просто
 любой GET на :8000 (включая `/`) упрётся в ветку «Frontend не собран».
 
 ### Режим эксплуатации: один FastAPI на :8000
@@ -217,8 +217,8 @@ cd frontend && npm run build    # один раз: создаёт dist/
 cd .. && uvicorn main:main_app
 ```
 
-`dist/` создан, `setup_spa` его видит, всё работает через один процесс. Именно
-для этого режима и существует модуль `frontend_spa.py`.
+`dist/` создан, `setup_react_routing_assets` его видит, всё работает через один процесс. Именно
+для этого режима и существует модуль `frontend_routing.py`.
 
 ### Гибрид: dev-режим, но «посмотреть, как собранный фронт ляжет на прод»
 
@@ -234,11 +234,11 @@ Vite не запущен, FastAPI обслуживает и API, и собран
 
 ## 6. Что сломается при неправильной правке
 
-### Переставить `setup_spa` до `include_router`
+### Переставить `setup_react_routing_assets` до `include_router`
 
 ```python
 # НЕПРАВИЛЬНО
-setup_spa(main_app)
+setup_react_routing_assets(main_app)
 main_app.include_router(router_api)   # окажется ПОСЛЕ catch-all
 ```
 
@@ -270,18 +270,18 @@ app.router.routes.append(Route("/{full_path:path}", spa_fallback))
 эффект. С `methods=["GET"]` POST-запросы идут мимо catch-all и получают
 нормальный 404 от Starlette.
 
-### Поменять порядок mount'ов: `setup_spa` до `register_md_articles`
+### Поменять порядок mount'ов: `setup_react_routing_assets` до `setup_auth_static_include`
 
-В этом проекте `main.py` вызывает `register_md_articles(main_app)` после
-доменных `include_router`, а `setup_spa(main_app)` — после `register_md_articles`.
-Если бы `setup_spa` оказался до `register_md_articles`, mount `/assets` шёл
+В этом проекте `main.py` вызывает `setup_auth_static_include(main_app)` после
+доменных `include_router`, а `setup_react_routing_assets(main_app)` — после `setup_auth_static_include`.
+Если бы `setup_react_routing_assets` оказался до `setup_auth_static_include`, mount `/assets` шёл
 бы **раньше** API-роутеров блога. Здесь это безопасно (разные префиксы — `/api`
 против `/assets`), но **плохая привычка** — порядок mount'ов в `router.routes`
 меняет приоритет, и в других проектах это может выстрелить.
 
 ## 7. Резюме одной фразой
 
-`setup_spa(app)` делает ровно три вещи — монтирует `/assets`, дописывает
+`setup_react_routing_assets(app)` делает ровно три вещи — монтирует `/assets`, дописывает
 GET-catch-all в конец `router.routes`, защищает `/api*` от попадания в SPA —
 и каждая из этих трёх вещей ломает ровно один класс проблем, если её
 убрать или поставить не на место.

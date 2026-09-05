@@ -19,9 +19,8 @@
 3. **Блог** (`md_articles/` + `frontend/`) — React SPA на JSON API `/api/blog`:
    статьи из YAML-реестра с серверным Markdown-рендером и клиентской подсветкой
    highlight.js, вход/регистрация/аккаунт (cookie-сессии, bcrypt, аватары),
-   управление реестром, темы сайта/подсветки. История порта: flask-blog-1 →
-   Jinja2 → React (архивы `tasks/001-*`, `tasks/002-*`; текущая архитектура —
-   [`docs/11_md_articles.md`](docs/11_md_articles.md)).
+   управление реестром, темы сайта/подсветки. Подробности по архитектуре блога —
+   [`docs/11_md_articles.md`](docs/11_md_articles.md) и [`docs/15_md_articles_package.md`](docs/15_md_articles_package.md).
 
 **Дублирование маршрутов и обработчиков в `api/` намеренное** — сравнивать файлы
 построчно и есть учебная цель. Не «рефакторьте» это в общий код, не выяснив задачу.
@@ -47,7 +46,7 @@
 
 `fastapi-application/create_fastapi.py` предоставляет фабрику `create_app()` с `lifespan`
 (engine создаётся на импорте, dispose — в shutdown). `main.py` собирает `main_app`:
-подключает корневые роутеры, вызывает `md_articles.register_md_articles(main_app)`
+подключает корневые роутеры, вызывает `md_articles.setup_auth_static_include(main_app)`
 (сессии, current_user-middleware, статика `/static`, JSON-роутер блога), затем
 монтирует `/assets` и добавляет SPA catch-all
 (детали — [`docs/11_md_articles.md`](docs/11_md_articles.md)):
@@ -77,14 +76,13 @@ my-fastapi-one/                 <- корень репозитория; здес
 ├── frontend/                    React SPA блога: Vite + TS + Tailwind v4 (dist/ не коммитится)
 ├── docs/                        подробная документация по проекту (15 файлов, рус.)
 ├── templates_qwen_agents/       комплект агентного режима из другого проекта — ТОЛЬКО пример, не трогать
-├── templates_flaskblog/         исходник блога (Flask) — ТОЛЬКО пример, не трогать
 ├── docker-compose.yml           dev-стек: pg + adminer + pgadmin
 ├── nginx_pg_admin.yml           прод-подобный стек: pg + pgadmin + redis + nginx (TLS)
 ├── Makefile                     запуск uvicorn, alembic, docker network
 ├── pyproject.toml uv.lock       зависимости (uv) + конфиг ruff/black
 └── fastapi-application/         корень Python-приложения (= BASE_DIR)
-    ├── main.py                  main_app + подключение роутеров + setup_spa() (SPA-слой в frontend_spa.py)
-    ├── frontend_spa.py          mount /assets + SPA catch-all + защита /api* (см. docs/13)
+    ├── main.py                  main_app + подключение роутеров + setup_react_routing_assets() (SPA-слой в frontend_routing.py)
+    ├── frontend_routing.py      mount /assets + SPA catch-all + защита /api* (см. docs/13)
     ├── main_gunicorn.py         точка входа gunicorn (переиспользует main_app)
     ├── create_fastapi.py        фабрика create_app() + lifespan (блог подключается в main.py)
     ├── base_dir_path.py         DIR_CWD / BASE_DIR (Path)
@@ -95,7 +93,7 @@ my-fastapi-one/                 <- корень репозитория; здес
     ├── api/                     демонстрационная часть: dependencies/ + my_routes_dep/
     ├── ex_user_post/             домен User/Post: router + crud + models + schemas
     ├── ex_order_product/        домен Order/Product: router + models + schemas
-    ├── md_articles/             блог: api_blog.py (JSON API), schema_art, модели, web_utils
+    ├── md_articles/             блог: api_blog.py (JSON API), schema_art, модели, auth_middleware_helpers
     ├── content_art/             .md-статьи блога (кладёт пользователь)
     ├── static/                  profile_pics/ (аватары)
     ├── alembic/                 асинхронные миграции (3 ревизии)
@@ -120,9 +118,9 @@ my-fastapi-one/                 <- корень репозитория; здес
 | [`docs/08_ideas_di_api.md`](docs/08_ideas_di_api.md) | идеи развития: DI и API-слой |
 | [`docs/09_ideas_data_layer.md`](docs/09_ideas_data_layer.md) | идеи развития: слой данных |
 | [`docs/10_ideas_testing_infra.md`](docs/10_ideas_testing_infra.md) | идеи развития: тесты, конфигурация, инфраструктура |
-| [`docs/11_md_articles.md`](docs/11_md_articles.md) | блог md_articles: архитектура, маршруты, отличия от Flask-версии |
+| [`docs/11_md_articles.md`](docs/11_md_articles.md) | блог md_articles: архитектура, маршруты, JSON API для React SPA |
 | [`docs/12_fastapi_react_integration.md`](docs/12_fastapi_react_integration.md) | связка FastAPI + React: способы организации фронтенда, dev vs прод |
-| [`docs/13_frontend_spa_module.md`](docs/13_frontend_spa_module.md) | модуль `frontend_spa.py`: как код подключает собранный React, dev-режим без `dist/` |
+| [`docs/13_frontend_spa_module.md`](docs/13_frontend_spa_module.md) | модуль `frontend_routing.py`: как код подключает собранный React, dev-режим без `dist/` |
 | [`docs/14_create_fastapi_factory.md`](docs/14_create_fastapi_factory.md) | фабрика `create_app()` и `lifespan` в `create_fastapi.py`: каркас vs наполнение |
 | [`docs/15_md_articles_package.md`](docs/15_md_articles_package.md) | пакет `md_articles`: JSON API блога, реестр статей, сессии |
 

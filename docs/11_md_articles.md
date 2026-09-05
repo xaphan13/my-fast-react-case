@@ -3,16 +3,8 @@
 Документ описывает пакет `fastapi-application/md_articles/` (JSON API `/api/blog`)
 и клиентскую часть `frontend/` — **отдельное React-приложение** (свой npm-проект
 со своим `package.json`, dev-сервером и сборкой; с бэкендом его связывает только
-контракт JSON API). Блог портирован с Flask (flask-blog-1, исходник
-`templates_flaskblog/`, только для чтения) через промежуточную версию на Jinja2
-(архивы заданий `tasks/001-md-articles-blog/`, `tasks/002-two-dark-themes/`);
-текущая архитектура — результат задания «Миграция блога md_articles на React»
-(`tasks/003-react-blog-migration/`: React 18 + TypeScript + Vite + Tailwind CSS v4)
-с последующими доработками фронтенда: разделы статей (`004-article-sections`),
-дефолты `add_all` (`005-add-all-defaults`), пагинация (`006-article-lists-pagination`),
-карточки в одну строку (`007-card-one-line-gradient`), sticky-меню
-(`008-sticky-left-menu`), переделка «Управления» (`009-artmanage-list-form-filters`),
-боковые панели-модалки (`010-artmanage-side-panels`).
+контракт JSON API). Архитектура и доработки зафиксированы в заданиях команды
+(см. `tasks/NNN-*` — закрытые задания и их отчёты о выполнении).
 
 ## Назначение
 
@@ -43,11 +35,11 @@
 ```
 fastapi-application/
 ├── md_articles/
-│   ├── __init__.py        # register_md_articles(): SessionMiddleware, current_user-middleware, mount /static, router_blog_api
+│   ├── __init__.py        # setup_auth_static_include(): SessionMiddleware, current_user-middleware, mount /static, router_blog_api
 │   ├── api_blog.py        # JSON API /api/blog (13 эндпоинтов) + CSRF-хелперы + RequestValidationError-хендлер
 │   ├── schema_art.py      # ArticleLang (+section) + YAML-реестр (mtime-кэш, last-good-state, атомарная запись)
 │   ├── models.py          # BlogUser / BlogPost
-│   ├── web_utils.py       # get_current_user, login_user, logout_user, hash_password, verify_password
+│   ├── auth_middleware_helpers.py # auth_add_middleware, current_user-middleware, login/logout, bcrypt, CSRF
 │   └── articles.yaml      # реестр статей
 ├── content_art/           # .md-статьи (кладёт пользователь)
 ├── static/
@@ -109,7 +101,7 @@ frontend/                  # Отдельное React-приложение (св
 
 ## Архитектура и слои
 
-Подключение — `main.py` после доменных `include_router` и до `setup_spa(main_app)` вызывает `register_md_articles(main_app)`:
+Подключение — `main.py` после доменных `include_router` и до `setup_react_routing_assets(main_app)` вызывает `setup_auth_static_include(main_app)`:
 
 1. **middleware** `inject_current_user_middleware` — загружает `current_user`
    (по `session["user_id"]`) в `request.state`; поверх `SessionMiddleware`

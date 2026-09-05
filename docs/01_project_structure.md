@@ -40,8 +40,8 @@ my-fastapi-one/
 │       └── types.ts                 # User, Article, Section — типы контракта /api/blog
 ├── templates_qwen_agents/           # Комплект агентного режима из другого проекта — только пример
 ├── fastapi-application/             # Корень Python-приложения (= BASE_DIR)
-│   ├── main.py                      # Точка входа uvicorn; сборка main_app из роутеров + setup_spa()
-│   ├── frontend_spa.py              # Подключение собранного React: mount /assets + SPA catch-all
+│   ├── main.py                      # Точка входа uvicorn; сборка main_app из роутеров + setup_react_routing_assets()
+│   ├── frontend_routing.py              # Подключение собранного React: mount /assets + SPA catch-all
 │   ├── main_gunicorn.py             # Точка входа gunicorn; переиспользует main_app
 │   ├── create_fastapi.py            # Фабрика приложения create_app() + lifespan (без блога — блог подключается в main.py)
 │   ├── base_dir_path.py             # DIR_CWD / BASE_DIR (Path)
@@ -99,11 +99,11 @@ my-fastapi-one/
 │   │   └── schema_order_product.py  # 20+ pydantic-схем, включая вложенные Resp
 │   │
 │   ├── md_articles/                 # Блог: JSON API /api/blog + реестр статей
-│   │   ├── __init__.py              # register_md_articles(): вызывается из main.py, не из create_app() — middleware, mount /static, роутер
+│   │   ├── __init__.py              # setup_auth_static_include(): вызывается из main.py, не из create_app() — middleware, mount /static, роутер
 │   │   ├── api_blog.py              # 13 JSON-эндпоинтов /api/blog (включая /sections) + CSRF + 422-хендлер
 │   │   ├── schema_art.py            # ArticleLang (+section) + YAML-реестр (mtime-кэш, атомарная запись)
 │   │   ├── models.py                # BlogUser / BlogPost (SQLAlchemy 2.0)
-│   │   ├── web_utils.py             # get_current_user, login/logout_user, bcrypt-хелперы
+│   │   ├── auth_middleware_helpers.py # auth_add_middleware, current_user-middleware, login/logout, bcrypt, CSRF
 │   │   └── articles.yaml            # реестр статей (кладёт/правит пользователь через /art_manage)
 │   ├── content_art/                 # .md-статьи блога (кладёт пользователь)
 │   ├── static/profile_pics/         # аватары: default.jpg (125×125) + загруженные
@@ -141,9 +141,9 @@ my-fastapi-one/
 
 | Файл | Ответственность | Абстракции |
 |---|---|---|
-| `fastapi-application/main.py` | Собирает `main_app`: вызывает `create_app()` (каркас: FastAPI + lifespan + /docs), подключает три корневых роутера, вызывает `register_md_articles(main_app)` (блог: middleware + mount /static + router_blog_api) и затем `setup_spa(main_app)`. Функция `main()` запускает `uvicorn.run("main:main_app", reload=True)`. Вся SPA-обвязка вынесена в `frontend_spa.py`. | `main_app: FastAPI`, `main()` |
-| `fastapi-application/frontend_spa.py` | Единственная точка, где FastAPI узнаёт про фронтенд. `setup_spa(app)` монтирует `/assets` (`StaticFiles` из `frontend/dist/assets`, `check_dir=False`), дописывает в конец `app.router.routes` GET-catch-all `/{full_path:path}` → `spa_fallback` (отдаёт `index.html`; для `/api*` и при отсутствии `index.html` — JSON 404). Подробно — в [`docs/13_frontend_spa_module.md`](13_frontend_spa_module.md). | `setup_spa()`, `spa_fallback()`, `FRONTEND_DIST`, `ASSETS_DIR`, `INDEX_HTML` |
-| `fastapi-application/create_fastapi.py` | Единственное место создания `FastAPI`. Настраивает `ORJSONResponse` по умолчанию, `lifespan`, переключает встроенные `/docs` на кастомные по флагу. Блог сюда не входит — он подключается из `main.py` через `register_md_articles`. | `create_app()`, `lifespan()` |
+| `fastapi-application/main.py` | Собирает `main_app`: вызывает `create_app()` (каркас: FastAPI + lifespan + /docs), подключает три корневых роутера, вызывает `setup_auth_static_include(main_app)` (блог: middleware + mount /static + router_blog_api) и затем `setup_react_routing_assets(main_app)`. Функция `main()` запускает `uvicorn.run("main:main_app", reload=True)`. Вся SPA-обвязка вынесена в `frontend_routing.py`. | `main_app: FastAPI`, `main()` |
+| `fastapi-application/frontend_routing.py` | Единственная точка, где FastAPI узнаёт про фронтенд. `setup_react_routing_assets(app)` монтирует `/assets` (`StaticFiles` из `frontend/dist/assets`, `check_dir=False`), дописывает в конец `app.router.routes` GET-catch-all `/{full_path:path}` → `spa_fallback` (отдаёт `index.html`; для `/api*` и при отсутствии `index.html` — JSON 404). Подробно — в [`docs/13_frontend_spa_module.md`](13_frontend_spa_module.md). | `setup_react_routing_assets()`, `spa_fallback()`, `FRONTEND_DIST`, `ASSETS_DIR`, `INDEX_HTML` |
+| `fastapi-application/create_fastapi.py` | Единственное место создания `FastAPI`. Настраивает `ORJSONResponse` по умолчанию, `lifespan`, переключает встроенные `/docs` на кастомные по флагу. Блог сюда не входит — он подключается из `main.py` через `setup_auth_static_include`. | `create_app()`, `lifespan()` |
 | `fastapi-application/base_dir_path.py` | Два `Path`-константы. `BASE_DIR` = каталог `fastapi-application/`, служит якорем для `.env`, папки логов, контента статей (`content_art/`) и аватаров. | `BASE_DIR` |
 
 ### Конфигурация
@@ -198,11 +198,11 @@ my-fastapi-one/
 
 | Файл | Ответственность | Абстракции |
 |---|---|---|
-| `md_articles/__init__.py` | `register_md_articles(app)` — вызывается из `main.py`: middleware `inject_current_user_middleware`, `SessionMiddleware` (cookie 14 дней), mount `/static` (аватары), глобальный хендлер `RequestValidationError` (формат `{errors}` только для `/api/blog`), include `router_blog_api`. | `register_md_articles()` |
+| `md_articles/__init__.py` | `setup_auth_static_include(app)` — вызывается из `main.py`: middleware `inject_current_user_middleware`, `SessionMiddleware` (cookie 14 дней), mount `/static` (аватары), глобальный хендлер `RequestValidationError` (формат `{errors}` только для `/api/blog`), include `router_blog_api`. | `setup_auth_static_include()` |
 | `md_articles/api_blog.py` | JSON API блога: 13 эндпоинтов под `/api/blog` (csrf, current_user, register/login/logout, account GET/POST, articles с фильтром `?section=`, articles/{id}, sections, art_manage + add_all + meta). CSRF: заголовок `X-CSRF-Token` для JSON, поле формы `csrf_token` для multipart. Авторизация — 403 JSON вместо редиректа. | `router_blog_api`, `validate_csrf_header/form`, `require_login_api` |
 | `md_articles/schema_art.py` | Реестр статей: pydantic-модель `ArticleLang`, чтение `articles.yaml` с mtime-кэшем и last-good-state при ошибке парсинга, атомарная запись (tempfile + `os.replace`), скан `content_art/`. Контент — `BASE_DIR / "content_art"`. | `ArticleLang`, `get_articles()`, `save_articles()`, `render_article()` |
 | `md_articles/models.py` | `BlogUser` / `BlogPost` (SQLAlchemy 2.0, реэкспортированы в `db_core/__init__.py` для Alembic). | `BlogUser`, `BlogPost` |
-| `md_articles/web_utils.py` | Сессии и пароли: `get_current_user` (из `session["user_id"]` в `request.state`), `login_user`/`logout_user`, `hash_password`/`verify_password` (bcrypt). | `get_current_user` |
+| `md_articles/auth_middleware_helpers.py` | Сессии и пароли: `get_current_user` (из `session["user_id"]` в `request.state`), `login_user`/`logout_user`, `hash_password`/`verify_password` (bcrypt). | `get_current_user` |
 | `frontend/src/api/client.ts` | Базовый fetch-клиент: `credentials: 'include'`, `getCsrfToken()` → `GET /api/blog/csrf`, `postJson()` с заголовком `X-CSRF-Token`, `postMultipart()` с полем `csrf_token`, класс `ApiError`. | `getJson`, `postJson`, `postMultipart` |
 | `frontend/src/api/blog.ts` | Запросы контента: `getArticles(section?)`, `getSections()`, `getArticle(id)` — разделы и фильтрация по разделу. | `getArticles`, `getSections` |
 | `frontend/src/components/SectionMenu.tsx` | Левое меню разделов (подпапки `content_art/`): NavLink, «Все статьи» + пункты `/section/<name>`, активный пункт, sticky-поведение из CSS. | `SectionMenu` |
@@ -278,8 +278,8 @@ dev-зависимости — `vite@6`, `typescript@5.6`, `tailwindcss@4.1` (п
 ## Агентный режим разработки
 
 Проект развивается командой агентов Qwen Code по одному заданию за раз (добавлено
-2026-08-30; перенесено из другого проекта, исходный комплект — в
-`templates_qwen_agents/`).
+2026-08-30; комплект агентного режима — в `templates_qwen_agents/` как внешний
+референс).
 
 | Файл | Назначение |
 |---|---|
@@ -296,6 +296,6 @@ OPEN → FIX-READY/DISPUTED → CLOSED (закрывает только qa) → 
 подтверждены доказательствами, задание архивируется с отчётом, и цикл повторяется
 с новым заданием.
 
-В `templates_qwen_agents/` лежит комплект из проекта flask-blog-1 — **только пример**,
+В `templates_qwen_agents/` лежит комплект агентного режима — **только пример**,
 для образца; рабочие файлы агентного режима — `QWEN.md`, `AGENTS.md`, `README.md`,
 `tasks/`, `.qwen/` в корне этого репозитория. Подробности — в этих файлах.

@@ -20,9 +20,8 @@
 3. **Блог** (`md_articles/` + `frontend/`) — React SPA на JSON API `/api/blog`:
    статьи из YAML-реестра с серверным Markdown-рендером и клиентской подсветкой
    highlight.js, вход/регистрация/аккаунт (cookie-сессии, bcrypt, аватары),
-   управление реестром, темы сайта/подсветки. История порта: flask-blog-1 →
-   Jinja2 → React (архивы `tasks/001-*`, `tasks/002-*`; текущая архитектура —
-   [`docs/11_md_articles.md`](docs/11_md_articles.md)).
+   управление реестром, темы сайта/подсветки. Подробности по архитектуре блога —
+   [`docs/11_md_articles.md`](docs/11_md_articles.md) и [`docs/15_md_articles_package.md`](docs/15_md_articles_package.md).
 
 **Дублирование маршрутов и обработчиков в `api/` намеренное** — сравнивать файлы
 построчно и есть учебная цель. Не «рефакторьте» это в общий код, не выяснив задачу.
@@ -48,8 +47,8 @@
 
 `fastapi-application/create_fastapi.py` предоставляет фабрику `create_app()` с `lifespan`
 (engine создаётся на импорте, dispose — в shutdown). `main.py` собирает `main_app`,
-подключает три корневых роутера, вызывает `md_articles.register_md_articles(main_app)`
-(сессии, статика `/static`, JSON-роутер блога) и затем `setup_spa(main_app)`
+подключает три корневых роутера, вызывает `md_articles.setup_auth_static_include(main_app)`
+(сессии, статика `/static`, JSON-роутер блога) и затем `setup_react_routing_assets(main_app)`
 (детали — [`docs/11_md_articles.md`](docs/11_md_articles.md)):
 
 | Роутер | Модуль | Префикс | Что внутри |
@@ -77,14 +76,13 @@ my-fastapi-one/                 <- корень репозитория; здес
 ├── frontend/                    React SPA блога: Vite + TS + Tailwind v4 (dist/ не коммитится)
 ├── docs/                        подробная документация по проекту (15 файлов, рус.)
 ├── templates_qwen_agents/       комплект агентного режима из другого проекта — ТОЛЬКО пример, не трогать
-├── templates_flaskblog/         исходник блога (Flask) — ТОЛЬКО пример, не трогать
 ├── docker-compose.yml           dev-стек: pg + adminer + pgadmin
 ├── nginx_pg_admin.yml           прод-подобный стек: pg + pgadmin + redis + nginx (TLS)
 ├── Makefile                     запуск uvicorn, alembic, docker network
 ├── pyproject.toml uv.lock       зависимости (uv) + конфиг ruff/black
 └── fastapi-application/         корень Python-приложения (= BASE_DIR)
-    ├── main.py                  main_app + подключение роутеров + setup_spa() (SPA-слой в frontend_spa.py)
-    ├── frontend_spa.py          mount /assets + SPA catch-all + защита /api* (см. docs/13)
+    ├── main.py                  main_app + подключение роутеров + setup_react_routing_assets() (SPA-слой в frontend_routing.py)
+    ├── frontend_routing.py      mount /assets + SPA catch-all + защита /api* (см. docs/13)
     ├── main_gunicorn.py         точка входа gunicorn (переиспользует main_app)
     ├── create_fastapi.py        фабрика create_app() + lifespan (блог подключается в main.py)
     ├── base_dir_path.py         DIR_CWD / BASE_DIR (Path)
@@ -95,7 +93,7 @@ my-fastapi-one/                 <- корень репозитория; здес
     ├── api/                     демонстрационная часть: dependencies/ + my_routes_dep/
     ├── ex_user_post/             домен User/Post: router + crud + models + schemas
     ├── ex_order_product/        домен Order/Product: router + models + schemas
-    ├── md_articles/             блог: api_blog.py (JSON API), schema_art, модели, web_utils
+    ├── md_articles/             блог: api_blog.py (JSON API), schema_art, модели, auth_middleware_helpers
     ├── content_art/             .md-статьи блога (кладёт пользователь)
     ├── static/                  profile_pics/ (аватары)
     ├── alembic/                 асинхронные миграции (3 ревизии)
@@ -120,9 +118,9 @@ my-fastapi-one/                 <- корень репозитория; здес
 | [`docs/08_ideas_di_api.md`](docs/08_ideas_di_api.md) | идеи развития: DI и API-слой |
 | [`docs/09_ideas_data_layer.md`](docs/09_ideas_data_layer.md) | идеи развития: слой данных |
 | [`docs/10_ideas_testing_infra.md`](docs/10_ideas_testing_infra.md) | идеи развития: тесты, конфигурация, инфраструктура |
-| [`docs/11_md_articles.md`](docs/11_md_articles.md) | блог md_articles: архитектура, маршруты, отличия от Flask-версии |
+| [`docs/11_md_articles.md`](docs/11_md_articles.md) | блог md_articles: архитектура, маршруты, JSON API для React SPA |
 | [`docs/12_fastapi_react_integration.md`](docs/12_fastapi_react_integration.md) | связка FastAPI + React: способы организации фронтенда, dev vs прод |
-| [`docs/13_frontend_spa_module.md`](docs/13_frontend_spa_module.md) | модуль `frontend_spa.py`: как код подключает собранный React, dev-режим без `dist/` |
+| [`docs/13_frontend_spa_module.md`](docs/13_frontend_spa_module.md) | модуль `frontend_routing.py`: как код подключает собранный React, dev-режим без `dist/` |
 | [`docs/14_create_fastapi_factory.md`](docs/14_create_fastapi_factory.md) | фабрика `create_app()` и `lifespan` в `create_fastapi.py`: каркас vs наполнение |
 | [`docs/15_md_articles_package.md`](docs/15_md_articles_package.md) | пакет `md_articles`: JSON API блога, реестр статей, сессии |
 
@@ -367,15 +365,15 @@ nginx находятся в `.gitignore` — никогда не добавля�
 
 | Агент | Зона (можно редактировать) | Чем проверяет изменения | Особые запреты |
 |---|---|---|---|
-| frontend-dev | `frontend/` (React SPA: источники, Vite-конфиги, сборка), `nginx/web/`; пока жив старый блог — также Jinja2-шаблоны и статика блога `fastapi-application/templates/`, `fastapi-application/static/` (кроме контента `fastapi-application/content_art/` — статьи кладёт пользователь) | `cd frontend && npm run build` без ошибок; просмотр страницы; скриншот в `tasks/current/screenshots/` | Python-модули `fastapi-application/` — зона backend-dev; `frontend/dist` не коммитится |
-| backend-dev | Python-модули `fastapi-application/` (включая `alembic/`, env-профили, `md_articles/` с JSON API `api_blog.py`) | `uv run ruff check .`; `cd fastapi-application && ../.venv/bin/python -c "from main import main_app; print(len(main_app.routes))"` (после задачи 003 — 41; исторически до фазы 7 удаления Jinja — 54, после — 40, плюс добавлен `/api/blog/account` POST в задаче 011); curl изменённых эндпоинтов на запущенном приложении | `frontend/`, `nginx/web/`, `fastapi-application/templates/`, `fastapi-application/static/`; устаревшие API из раздела «Известные дефекты» — не чинить без отдельного задания; дублирование `api/my_routes_dep/` — намеренное; поведение блога `md_articles/` — порт flask-blog-1, «улучшательства» без отдельного задания запрещены |
+| frontend-dev | `frontend/` (React SPA: источники, Vite-конфиги, сборка), `nginx/web/` (если появится в задании) | `cd frontend && npm run build` без ошибок; просмотр страницы; скриншот в `tasks/current/screenshots/` | Python-модули `fastapi-application/` — зона backend-dev; `frontend/dist` не коммитится |
+| backend-dev | Python-модули `fastapi-application/` (включая `alembic/`, env-профили, `md_articles/` с JSON API `api_blog.py`) | `uv run ruff check .`; `cd fastapi-application && ../.venv/bin/python -c "from main import main_app; print(len(main_app.routes))"` (текущее значение: 42); curl изменённых эндпоинтов на запущенном приложении | `frontend/`, `nginx/web/`; устаревшие API из раздела «Известные дефекты» — не чинить без отдельного задания; дублирование `api/my_routes_dep/` — намеренное |
 | qa | `tasks/current/e2e/`, `tasks/current/DEFECTS.md`, `tasks/current/screenshots/` | curl-сценарии из критериев успеха текущего задания; регресс: `/docs`, `/users/get_all_users`, `/orders/get_all_orders`, один из `/api/v1/dep_examples/*`, `/art_home` | любой код продукта |
 | adversary | `tasks/current/ADVERSARIAL_REVIEW.md`, `tasks/current/screenshots/` | curl по запущенному приложению; логи `fastapi-application/log/` | всё, кроме своих файлов |
 | spec-writer | `tasks/current/REQUIREMENTS.md` — только на фазе создания задания, одним `write_file` по шаблону `.qwen/skills/task-spec/TEMPLATE.md` | чек-лист скилла `task-spec` (проверяет оркестратор) | код продукта; всё, кроме REQUIREMENTS.md на фазе создания |
 
 Общее для всех: не редактировать `.qwen/`, `tasks/current/REQUIREMENTS.md`, папки
 архивных заданий `tasks/NNN-*`, `AGENTS.md`, `QWEN.md`, `README.md`, `docs/`,
-`templates_qwen_agents/`, `templates_flaskblog/`; не добавлять зависимости и тестовые
+`templates_qwen_agents/`; не добавлять зависимости и тестовые
 фреймворки без решения оркестратора. Обновление документации в `docs/` координирует
 оркестратор. Единственное исключение: spec-writer на фазе создания пишет
 `tasks/current/REQUIREMENTS.md`; после старта исполнения файл заморожен для всех,

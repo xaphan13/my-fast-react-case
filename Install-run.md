@@ -1,4 +1,4 @@
-# FastAPI Example - my-fastapi-one
+# FastAPI Example - my-fast-react-case
 
 ************************************ run with uvicorn
 ```bash

@@ -1,6 +1,6 @@
 // Вставка готового серверного HTML статьи (article.content).
 // dangerouslySetInnerHTML допустим только здесь: backend рендерит markdown
-// тем же доверенным движком, что и старый Jinja-блог.
+// через доверенный движок `python-markdown` (см. md_articles/schema_art.py).
 
 import { useEffect } from 'react';
 

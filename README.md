@@ -1,4 +1,4 @@
-# my-fastapi-one — агентный режим
+# my-fast-react-case — агентный режим
 
 Учебно-демонстрационный проект на **FastAPI 0.111+ / Python 3.12** — исполняемый каталог
 приёмов, а не продуктовый сервис, — с внедрённым **агентным режимом**: задания по развитию
@@ -10,14 +10,13 @@
    четыре способа извлечения параметров HTTP-запроса (один эндпоинт
    `/my_items/{item_id}` в четырёх стилях), девять способов `Depends`, два стиля
    объявления pydantic-полей, два способа валидации.
-2. **Рабочая** (`example_sql/`, `ex_order_product/`, `db_core/`) — асинхронный слой данных
+2. **Рабочая** (`ex_user_post/`, `ex_order_product/`, `db_core/`) — асинхронный слой данных
    на SQLAlchemy 2.0 (`AsyncSession`, `asyncpg`/`aiosqlite`) с миграциями Alembic и двумя
    предметными областями: `User`/`Post` (one-to-many) и `Order`/`Product` (many-to-many).
 3. **Блог** (`md_articles/` + `frontend/`) — React SPA на JSON API `/api/blog`:
    статьи из YAML-реестра с серверным Markdown-рендером и клиентской подсветкой
    highlight.js, вход/регистрация/аккаунт (cookie-сессии, bcrypt, аватары),
-   управление реестром. История порта: flask-blog-1 → Jinja2 → React
-   (архивы `tasks/001-*`, `tasks/002-*`, `tasks/003-*`) — детали в
+   управление реестром. Детали по архитектуре блога — в
    [`docs/11_md_articles.md`](docs/11_md_articles.md).
 
 > Дублирование маршрутов и обработчиков в `api/` **намеренное** — сравнивать файлы
@@ -35,7 +34,7 @@
 | [tasks/current/REQUIREMENTS.md](tasks/current/REQUIREMENTS.md) | **текущее задание** команды + его рабочие артефакты |
 | [tasks/](tasks/) | архив закрытых заданий: `NNN-<slug>/` — задание, отчёт и все доказательства в одной папке |
 | `.qwen/agents/` | субагенты: spec-writer, frontend-dev, backend-dev, qa, adversary (модели — в frontmatter `model:` этих файлов) |
-| [docs/](docs/) | подробная документация по проекту (11 файлов, рус.) |
+| [docs/](docs/) | подробная документация по проекту (15 файлов, рус.) |
 
 Схема работы: пользователь кладёт задание в `tasks/current/REQUIREMENTS.md` и запускает
 Qwen Code в корне проекта. Главная сессия (оркестратором становится модель, с которой
@@ -57,8 +56,7 @@ disposition adversary, участники), а в свежую заглушку 
 Комплект переносим: чтобы внедрить агентный режим в другой проект, скопируйте эти файлы
 и `.qwen/`, а затем адаптируйте проектный контекст в `README.md`, `QWEN.md`, `AGENTS.md`
 под новый проект. `tasks/current/REQUIREMENTS.md` каждый раз получает задание нового
-проекта, архив `tasks/` начинается пустым. Исходный пример комплекта — в
-`templates_qwen_agents/` (файлы другого проекта, только для образца, не использовать).
+проекта, архив `tasks/` начинается пустым.
 
 ## Возможности
 
@@ -248,7 +246,7 @@ docker compose -f nginx_pg_admin.yml up -d
 | [`docs/08_ideas_di_api.md`](docs/08_ideas_di_api.md) | идеи развития: DI и API-слой |
 | [`docs/09_ideas_data_layer.md`](docs/09_ideas_data_layer.md) | идеи развития: слой данных |
 | [`docs/10_ideas_testing_infra.md`](docs/10_ideas_testing_infra.md) | идеи развития: тесты, конфигурация, инфраструктура |
-| [`docs/11_md_articles.md`](docs/11_md_articles.md) | блог md_articles: архитектура, маршруты, отличия от Flask-версии |
+| [`docs/11_md_articles.md`](docs/11_md_articles.md) | блог md_articles: архитектура, маршруты, JSON API для React SPA |
 
 ## Индекс кодовой базы
 
@@ -262,7 +260,7 @@ docker compose -f nginx_pg_admin.yml up -d
 
 ```bash
 uv run ruff check .                                                        # линтер (ruff в зависимостях)
-cd fastapi-application && ../.venv/bin/python -c "from main import main_app; print(len(main_app.routes))"   # 40
+cd fastapi-application && ../.venv/bin/python -c "from main import main_app; print(len(main_app.routes))"   # 42
 cd fastapi-application && ../.venv/bin/uvicorn main:main_app --port 8000    # затем curl /docs, /users/get_all_users, /api/blog/articles, /
 ```
 
