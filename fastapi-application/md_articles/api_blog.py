@@ -197,7 +197,10 @@ async def account_post_api(
     csrf_token_field: str = Form("", alias="csrf_token"),
 ):
     await validate_csrf_form(request)
-    current_user = _get_request_user(request)
+    current_user_id = request.session.get("user_id")
+    current_user = (
+        await session.execute(select(BlogUser).where(BlogUser.id == current_user_id))
+    ).scalar_one()
 
     errors: dict[str, list[str]] = {}
     username = username.strip()

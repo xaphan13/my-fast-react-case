@@ -29,7 +29,7 @@ def _user_out(user: BlogUser) -> UserOut:
         id=user.id,
         username=user.username,
         email=user.email,
-        image_file=f"/static/profile_pics/{user.image_file}",
+        image_file=user.image_file,
     )
 
 
@@ -73,10 +73,9 @@ async def _save_picture(form_picture: UploadFile) -> str:
         f_ext = ".jpg"
     picture_fn = random_hex + f_ext
 
-    profile_pics_dir = os.path.join(os.path.dirname(__file__), "..", "static", "profile_pics")
-    profile_pics_dir = os.path.abspath(profile_pics_dir)
-    os.makedirs(profile_pics_dir, exist_ok=True)
-    picture_path = os.path.join(profile_pics_dir, picture_fn)
+    profile_pics_dir = (Path(__file__).parent / ".." / "static" / "profile_pics").resolve()
+    profile_pics_dir.mkdir(parents=True, exist_ok=True)
+    picture_path = profile_pics_dir / picture_fn
 
     output_size = (125, 125)
     content = await form_picture.read()
