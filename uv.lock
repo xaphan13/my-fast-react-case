@@ -456,7 +456,7 @@ wheels = [
 ]
 
 [[package]]
-name = "my-fastapi-one"
+name = "my-fast-react-case"
 version = "1.0.0"
 source = { virtual = "." }
 dependencies = [
