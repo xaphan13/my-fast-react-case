@@ -1,6 +1,7 @@
 # VSCode
 .vscode/
-.kilo
+.kilo/
+.codebase-memory/
 
 # JetBrains IDE
 .idea/
