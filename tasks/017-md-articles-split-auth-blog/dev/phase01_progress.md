@@ -7,7 +7,7 @@
 - 7 auth-роутов скопированы 1:1 из `api_blog.py` (строки 64–244),
   `@router_blog_api.` → `@router_auth.`, `name="blog_api.*"` → `name="auth.*"`.
 - Импорт-блок по контракту, `Annotated` не понадобился (не используется в api_blog.py).
-- `router_auth` пока никуда не подключён (фаза 2).
+- `router_auth_api` пока никуда не подключён (фаза 2).
 
 ## Импорты — отличия от стартового списка
 
@@ -22,7 +22,7 @@
 1. `from md_articles.api_auth import router_auth; print(len(router_auth.routes))` → `7` (PASS)
 2. `print(sorted([r.name for r in router_auth.routes if r.name]))` →
    `['auth.account_get', 'auth.account_post', 'auth.csrf', 'auth.current_user', 'auth.login', 'auth.logout', 'auth.register']` (PASS)
-3. `from main import main_app; print(len(main_app.routes))` → `42` (PASS — `router_auth` не подключён)
+3. `from main import main_app; print(len(main_app.routes))` → `42` (PASS — `router_auth_api` не подключён)
 4. `uv run ruff check fastapi-application/md_articles/api_auth.py` → `All checks passed!` (PASS)
 
 Все checkpoint зелёные — фаза 1 готова к сдаче.

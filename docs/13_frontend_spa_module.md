@@ -1,6 +1,6 @@
 # 13. Модуль `frontend_routing.py`: как именно FastAPI раздаёт собранный React
 
-Этот документ — про конкретный код в [`frontend_routing.py`](../fastapi-application/frontend_routing.py):
+Этот документ — про конкретный код в [`frontend_routing.py`](../fastapi-application/md_articles/frontend_routing.py):
 почему он устроен так, как устроен, что делает каждая строка и какие грабли
 ждут при неправильном порядке вызовов.
 
@@ -178,7 +178,7 @@ setup_auth_static_include(main_app)      # middleware + mount /static + router_b
 setup_react_routing_assets(main_app)                 # ← СТРОГО после setup_auth_static_include
 ```
 
-`setup_react_routing_assets` дописывает два новых элемента в `router.routes`. Если его вызвать
+`mount_vite_react_assets` дописывает два новых элемента в `router.routes`. Если его вызвать
 **до** `include_router`, добавленные позже роутеры окажутся **после**
 catch-all — и тогда `GET /users/...` сначала попадёт в SPA, а не в API.
 Симптом: `/docs`, `/api/blog/articles`, `/users/get_all_users` отдают
@@ -186,7 +186,7 @@ catch-all — и тогда `GET /users/...` сначала попадёт в SP
 и она не проявляется сразу — браузер показывает SPA как ни в чём не бывало.
 
 Правило: **catch-all всегда последний в `router.routes`**. Любой `mount` или
-`include_router` после `setup_react_routing_assets` нужно ставить выше catch-all вручную, иначе
+`include_router` после `mount_vite_react_assets` нужно ставить выше catch-all вручную, иначе
 оно не сработает.
 
 ## 5. Dev-режим без `dist/`
@@ -207,7 +207,7 @@ SPA-обвязка из `frontend_routing.py` в этом режиме не за
 является «SPA-сервером», а FastAPI — чистым API.
 
 **Следствие:** `frontend/dist/` в dev-режиме не нужен. Можно вообще его
-удалить — `setup_react_routing_assets` отработает штатно благодаря `check_dir=False`, просто
+удалить — `mount_vite_react_assets` отработает штатно благодаря `check_dir=False`, просто
 любой GET на :8000 (включая `/`) упрётся в ветку «Frontend не собран».
 
 ### Режим эксплуатации: один FastAPI на :8000
@@ -217,7 +217,7 @@ cd frontend && npm run build    # один раз: создаёт dist/
 cd .. && uvicorn main:main_app
 ```
 
-`dist/` создан, `setup_react_routing_assets` его видит, всё работает через один процесс. Именно
+`dist/` создан, `mount_vite_react_assets` его видит, всё работает через один процесс. Именно
 для этого режима и существует модуль `frontend_routing.py`.
 
 ### Гибрид: dev-режим, но «посмотреть, как собранный фронт ляжет на прод»
@@ -234,7 +234,7 @@ Vite не запущен, FastAPI обслуживает и API, и собран
 
 ## 6. Что сломается при неправильной правке
 
-### Переставить `setup_react_routing_assets` до `include_router`
+### Переставить `mount_vite_react_assets` до `include_router`
 
 ```python
 # НЕПРАВИЛЬНО
@@ -270,11 +270,11 @@ app.router.routes.append(Route("/{full_path:path}", spa_fallback))
 эффект. С `methods=["GET"]` POST-запросы идут мимо catch-all и получают
 нормальный 404 от Starlette.
 
-### Поменять порядок mount'ов: `setup_react_routing_assets` до `setup_auth_static_include`
+### Поменять порядок mount'ов: `mount_vite_react_assets` до `include_router_api_frontend`
 
 В этом проекте `main.py` вызывает `setup_auth_static_include(main_app)` после
-доменных `include_router`, а `setup_react_routing_assets(main_app)` — после `setup_auth_static_include`.
-Если бы `setup_react_routing_assets` оказался до `setup_auth_static_include`, mount `/assets` шёл
+доменных `include_router`, а `setup_react_routing_assets(main_app)` — после `include_router_api_frontend`.
+Если бы `mount_vite_react_assets` оказался до `include_router_api_frontend`, mount `/assets` шёл
 бы **раньше** API-роутеров блога. Здесь это безопасно (разные префиксы — `/api`
 против `/assets`), но **плохая привычка** — порядок mount'ов в `router.routes`
 меняет приоритет, и в других проектах это может выстрелить.

@@ -8,7 +8,7 @@
 - [`docs/11_md_articles.md`](11_md_articles.md) — общий обзор пакета блога
   с точки зрения фич.
 - [`docs/14_create_fastapi_factory.md`](14_create_fastapi_factory.md) —
-  место `setup_auth_static_include` в общем каркасе приложения
+  место `include_router_api_frontend` в общем каркасе приложения
   (вызывается из `main.py`).
 - [`docs/12_fastapi_react_integration.md`](12_fastapi_react_integration.md) —
   как SPA получает данные блога через `/api/blog`.
@@ -29,20 +29,20 @@ md_articles/
 
 | Файл | Зона | Что внутри |
 |---|---|---|
-| `__init__.py` | публичный API | реэкспорт `setup_auth_static_include` |
-| `frontend_auth_include.py` | plug-in | `setup_auth_static_include(app)` — подключает блог к FastAPI |
+| `__init__.py` | публичный API | реэкспорт `include_router_api_frontend` |
+| `setup_frontend.py` | plug-in | `setup_auth_static_include(app)` — подключает блог к FastAPI |
 | `auth_middleware_helpers.py` | безопасность | `auth_add_middleware(app)`, `inject_current_user_middleware`, CSRF-хелперы, `login_user`/`logout_user`, `hash_password`/`verify_password` (bcrypt), `require_login_api` |
 | `api_blog.py` | API | роутер `router_blog_api` (prefix `/api/blog`), pydantic-схемы запросов/ответов, `_user_out` (формат JSON-ответа) |
 | `schema_art.py` | данные | модель `ArticleLang`, чтение/запись `articles.yaml` с mtime-кэшем, рендер `.md` через `markdown()`, сканирование `content_art/` |
 | `models.py` | данные | `BlogUser`, `BlogPost` (SQLAlchemy 2.0, попадают в `Base.metadata` для Alembic) |
 
-## 2. Точка входа — `frontend_auth_include.py`
+## 2. Точка входа — `setup_frontend.py`
 
 Публичный API пакета — единственная функция `setup_auth_static_include(app)`,
 реэкспортированная в `md_articles/__init__.py`. Вызывается из `main.py` после
 доменных `include_router` и до `setup_react_routing_assets(main_app)`.
 
-`setup_auth_static_include` делает три вещи в строгом порядке:
+`include_router_api_frontend` делает три вещи в строгом порядке:
 
 1. `auth_add_middleware(app)` — подключает всю авторизацию: `SessionMiddleware`
    (подписанные cookie, 14 дней), `inject_current_user_middleware` и обработчик
@@ -294,7 +294,7 @@ async def get_current_user(request, session) -> BlogUser | None:
   (не в `md_articles/`). Пакет только читает/рендерит их; класть
   контент внутрь пакета — лишнее связывание.
 - **Аватары** — в `fastapi-application/static/profile_pics/`. Пакет
-  отдаёт их через `mount('/static', ...)` в `frontend_auth_include.py`, но не
+  отдаёт их через `mount('/static', ...)` в `setup_frontend.py`, но не
   управляет файлами (загрузка/ресайз — в `api_blog._save_picture`).
 - **React-фронт** обращается к блогу через `/api/blog/*`. Контракт
   схем и формат ошибок — это «API-документация», которая

@@ -72,7 +72,7 @@ async def inject_current_user_middleware(request: Request, call_next):
 # ==============================================================================
 # ++++++++++++++++++++++++++++ auth setup (точка входа) ++++++++++++++++++++++++
 # ------------------------------------------------------------------------------
-def auth_add_middleware(app: FastAPI) -> None:
+def add_middleware_auth(app: FastAPI) -> None:
     """
     Подключает всю авторизацию к FastAPI-приложению.
 

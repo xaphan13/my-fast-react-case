@@ -27,7 +27,7 @@
 
 | # | Набор | Ожидание | Факт | Результат |
 |---|---|---|---|---|
-| 7 | `router_auth` | `['auth.account_get', 'auth.account_post', 'auth.csrf', 'auth.current_user', 'auth.login', 'auth.logout', 'auth.register']` | совпадает 1:1 | PASS |
+| 7 | `router_auth_api` | `['auth.account_get', 'auth.account_post', 'auth.csrf', 'auth.current_user', 'auth.login', 'auth.logout', 'auth.register']` | совпадает 1:1 | PASS |
 | 8 | `router_blog_api` | `['blog_api.art_manage', 'blog_api.art_manage_add_all', 'blog_api.art_manage_meta', 'blog_api.art_manage_sync', 'blog_api.article_detail', 'blog_api.articles', 'blog_api.sections']` | совпадает 1:1 | PASS |
 
 ## Блок 3 — Lint / format
@@ -72,7 +72,7 @@
 | 6. POST `/logout` (со свежим CSRF) | `{"message":"You have been logged out","category":"success"}` | совпадает | PASS |
 
 Этот блок подтверждает: CSRF-токен корректно привязывается к сессии, middleware-слой
-(`inject_current_user_middleware` + `auth_add_middleware` + `get_current_user`)
+(`inject_current_user_middleware` + `add_middleware_auth` + `get_current_user`)
 и auth-хелперы (`login_user`/`logout_user`, CSRF-хелперы, `require_login_api`,
 `hash_password`/`verify_password`) работают сквозной цепочкой через перенесённые
 модули — тихих регрессов нет.

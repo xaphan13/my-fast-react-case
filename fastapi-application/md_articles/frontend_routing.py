@@ -72,7 +72,7 @@ async def spa_fallback(request: Request) -> FileResponse | JSONResponse:
     return FileResponse(INDEX_HTML)
 
 
-def setup_react_routing_assets(app: FastAPI) -> None:
+def mount_vite_react_assets(app: FastAPI) -> None:
     """
     Подключает раздачу собранного React-приложения к FastAPI.
 

@@ -385,7 +385,7 @@ def as_dependency(self, request: Request,
 
 ### Разрешение маршрута
 
-FastAPI обходит `main_app.routes` в порядке регистрации и берёт **первое** совпадение по пути и методу. Порядок задан последовательностью в `main.py`: `router_api` → `r_users_sql` → `r_order_one` → `router_blog_api` (из `setup_auth_static_include`) → mount `/static` → mount `/assets` → catch-all. Конфликтов путей нет — префиксы `/api/v1`, `/users`, `/orders`, `/api/blog`, `/static`, `/assets` не пересекаются; catch-all замыкает список и отдаёт SPA `index.html` всем остальным GET-путям.
+FastAPI обходит `main_app.routes` в порядке регистрации и берёт **первое** совпадение по пути и методу. Порядок задан последовательностью в `main.py`: `router_api` → `r_users_sql` → `r_order_one` → `router_blog_api` (из `include_router_api_frontend`) → mount `/static` → mount `/assets` → catch-all. Конфликтов путей нет — префиксы `/api/v1`, `/users`, `/orders`, `/api/blog`, `/static`, `/assets` не пересекаются; catch-all замыкает список и отдаёт SPA `index.html` всем остальным GET-путям.
 
 Четыре обработчика с идентичным путём `/my_items/{item_id}` разведены префиксами на уровне `my_routes_dep/__init__.py`, поэтому коллизии не возникает. В графе кода они схлопнулись в один узел `Route`, но в рантайме это четыре разных маршрута.
 
@@ -435,7 +435,7 @@ FastAPI обходит `main_app.routes` в порядке регистраци�
 
 ### Middleware
 
-**Пользовательских middleware два**, оба подключает `setup_auth_static_include` в `main.py`:
+**Пользовательских middleware два**, оба подключает `include_router_api_frontend` в `main.py`:
 
 1. **`SessionMiddleware`** (starlette, `add_middleware`) — подписанные cookie-сессии: ключ `settings.web.secret_key`, `max_age = 14 дней`. В сессии живут `user_id` и `csrf_token`.
 2. **`inject_current_user_middleware`** (`app.middleware("http")`) — на каждый HTTP-запрос открывает сессию БД через `db_manager.session_factory()`, по `session["user_id"]` делает `SELECT blog_user` и кладёт результат (или `None`) в `request.state.current_user`. Все обработчики блога читают пользователя из `request.state`, а не из зависимости.
@@ -479,7 +479,7 @@ FastAPI обходит `main_app.routes` в порядке регистраци�
 - `cls_deps.py` — `401 UNAUTHORIZED` (демо-токен);
 - `api_blog.py` — `403` (CSRF mismatch, `require_login_api`), `400` (уже авторизован), `401` (неверный логин/пароль), `404` (статья не найдена).
 
-**Кастомный обработчик исключений один**: `custom_request_validation_exception_handler` (регистрируется в `setup_auth_static_include` при подключении блога в `main.py`) переписывает ответы `RequestValidationError` в формат `{"errors": {...}}`, но **только** для путей `/api/blog*` — остальные пути получают стандартный формат FastAPI. Формат нужен фронтенду: он раскладывает ошибки по полям формы.
+**Кастомный обработчик исключений один**: `custom_request_validation_exception_handler` (регистрируется в `include_router_api_frontend` при подключении блога в `main.py`) переписывает ответы `RequestValidationError` в формат `{"errors": {...}}`, но **только** для путей `/api/blog*` — остальные пути получают стандартный формат FastAPI. Формат нужен фронтенду: он раскладывает ошибки по полям формы.
 
 При этом `IntegrityError` по-прежнему не обрабатывается: нарушение `UniqueConstraint` (например, дублирующийся `nickname` в `POST /users/create_user`) даёт **500** вместо 409. В блоге этой проблемы нет — уникальность username/email проверяется явными `SELECT`-запросами до вставки.
 

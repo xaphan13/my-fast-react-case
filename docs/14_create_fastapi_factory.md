@@ -7,13 +7,13 @@
 Смежные документы:
 - [`docs/02_architecture.md`](02_architecture.md) — общая архитектура, слои.
 - [`docs/03_execution_flow.md`](03_execution_flow.md) — жизненный цикл запроса.
-- [`docs/11_md_articles.md`](11_md_articles.md) — что именно делает `setup_auth_static_include`.
+- [`docs/11_md_articles.md`](11_md_articles.md) — что именно делает `include_router_api_frontend`.
 
 ## 1. Зачем фабрика живёт в отдельном модуле
 
 `main.py` собирает приложение из роутеров (`include_router`), подключает блог
 `md_articles` через `setup_auth_static_include(main_app)` и монтирует React SPA
-(`setup_react_routing_assets`). Само конструирование `FastAPI` (заголовок, ответ по умолчанию,
+(`mount_vite_react_assets`). Само конструирование `FastAPI` (заголовок, ответ по умолчанию,
 `lifespan`, маршруты документации) вынесено в `create_fastapi.py`, чтобы
 `main.py` оставался короткой «картой» того, что входит в приложение, а
 `create_app()` — единственным местом, где конструируется каркас. Блог и SPA
@@ -94,7 +94,7 @@ if custom_docs_url:
   `main.py` после доменных `include_router` и до `setup_react_routing_assets(main_app)`.
   Подробности — в [`docs/11_md_articles.md`](11_md_articles.md).
 - **Не подключает SPA.** `frontend_routing.setup_react_routing_assets(main_app)` живёт в
-  `main.py` после `setup_auth_static_include`. См.
+  `main.py` после `include_router_api_frontend`. См.
   [`docs/13_frontend_spa_module.md`](13_frontend_spa_module.md).
 - **Не запускает `uvicorn`.** Это дело `if __name__ == "__main__": main()`
   в `main.py` и `main_gunicorn.py`.
@@ -134,7 +134,7 @@ engine SQLAlchemy. Без явного `dispose` процесс может «в�
 | Слой | Где | Что в нём |
 |---|---|---|
 | Каркас | `create_app()` | `FastAPI(...)`, `lifespan`, переключение `/docs`/`/redoc` |
-| Наполнение | `main.py` | `include_router` для `api/`, `ex_user_post/`, `ex_order_product/`, вызов `setup_auth_static_include(main_app)`, `setup_react_routing_assets` для React-фронта, запуск `uvicorn` |
+| Наполнение | `main.py` | `include_router` для `api/`, `ex_user_post/`, `ex_order_product/`, вызов `setup_auth_static_include(main_app)`, `mount_vite_react_assets` для React-фронта, запуск `uvicorn` |
 | Плагин | `md_articles.setup_auth_static_include` | middleware (сессии, current_user), mount `/static`, JSON-роутер `/api/blog` |
 | Точка входа | `main.py::main()`, `main_gunicorn.py` | `uvicorn.run(...)`, `gunicorn main:main_app` |
 
@@ -151,14 +151,14 @@ setup_react_routing_assets(main_app)  # mount /assets + SPA catch-all
 
 Почему именно такой порядок:
 
-- Доменные `include_router` идут **до** `setup_auth_static_include`. В Starlette
+- Доменные `include_router` идут **до** `include_router_api_frontend`. В Starlette
   middleware, добавленные через `add_middleware` / `middleware("http")(...)`,
   оборачивают весь ASGI-стек, поэтому порядок их регистрации относительно
   `include_router` не влияет на охват. Текущий порядок безопасен ещё и
   потому, что доменные роутеры (`router_api`, `r_users_sql`, `r_order_one`)
   не используют `request.session` и `request.state.current_user` —
   это инвариант, который при добавлении новых доменов надо проверять.
-- `setup_auth_static_include` идёт **до** `setup_react_routing_assets` потому, что mount `/static`
+- `include_router_api_frontend` идёт **до** `mount_vite_react_assets` потому, что mount `/static`
   блога должен быть в списке раньше SPA catch-all — иначе GET
   `/static/profile_pics/...` уйдёт в SPA-обработчик и вернёт `index.html`.
 
@@ -168,7 +168,7 @@ setup_react_routing_assets(main_app)  # mount /assets + SPA catch-all
 - **Положить в `main.py`** как ещё один `include_router`, если это
   «тонкий» слой без побочных эффектов.
 - **Сделать plug-in** по образцу `md_articles`: `register_admin(app)`,
-  вызываемый из `main.py` рядом с `setup_auth_static_include`. Этот вариант
+  вызываемый из `main.py` рядом с `include_router_api_frontend`. Этот вариант
   подходит, когда модуль навешивает middleware или делает несколько
   `mount`-ов.
 - **Расширить `create_app()`** параметрами, если поведение каркаса должно

@@ -66,7 +66,7 @@ Starlette `SessionMiddleware` реализует паттерн **client-side se
 сессии сериализуется, подписывается HMAC с `secret_key` и целиком кладётся в cookie
 `session`. Сервер ничего не хранит — «база сессий» находится у клиента в браузере.
 
-Подключение — `fastapi-application/md_articles/frontend_auth_include.py`,
+Подключение — `../fastapi-application/md_articles/setup_frontend.py`,
 вызывается из `main.py`:
 
 ```python
@@ -745,7 +745,7 @@ frontend/src/api/
 | Что | Файл |
 |---|---|
 | Подключение блога (middleware + static + JSON API) | `md_articles/frontend_auth_include.py::setup_auth_static_include` |
-| `auth_add_middleware`: `SessionMiddleware` + current_user-middleware + exception handler | `md_articles/auth_middleware_helpers.py::auth_add_middleware` |
+| `add_middleware_auth`: `SessionMiddleware` + current_user-middleware + exception handler | `md_articles/auth_middleware_helpers.py::auth_add_middleware` |
 | Сессия: login/logout/get_current_user + bcrypt | `md_articles/auth_middleware_helpers.py` (login_user/logout_user/get_current_user, hash_password/verify_password) |
 | CSRF: генерация + 2 валидатора | `md_articles/auth_middleware_helpers.py::_ensure_csrf_token`, `validate_csrf_header`, `validate_csrf_form` |
 | `require_login_api` (403) | `md_articles/auth_middleware_helpers.py::require_login_api` |

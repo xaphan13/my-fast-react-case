@@ -27,7 +27,7 @@ from md_articles.models import BlogUser
 from md_articles.schema_blog import LoginIn, RegisterIn
 
 
-router_auth = APIRouter(
+router_auth_api = APIRouter(
     prefix="/api/blog",
     tags=["auth"],
 )
@@ -36,7 +36,7 @@ router_auth = APIRouter(
 # ==============================================================================
 # ++++++++++++++++++++++++++++++++++ csrf API ++++++++++++++++++++++++++++++++++
 # ------------------------------------------------------------------------------
-@router_auth.get("/csrf", name="auth.csrf")
+@router_auth_api.get("/csrf", name="auth.csrf")
 async def csrf_token(request: Request):
     token = ensure_csrf_token(request)
     return {"csrf_token": token}
@@ -45,7 +45,7 @@ async def csrf_token(request: Request):
 # ==============================================================================
 # ++++++++++++++++++++++++++++++ current_user API ++++++++++++++++++++++++++++++
 # ------------------------------------------------------------------------------
-@router_auth.get("/current_user", name="auth.current_user")
+@router_auth_api.get("/current_user", name="auth.current_user")
 async def current_user(request: Request):
     user = get_request_user(request)
     if user is None:
@@ -56,7 +56,7 @@ async def current_user(request: Request):
 # ==============================================================================
 # ++++++++++++++++++++++++++++++++ register API ++++++++++++++++++++++++++++++++
 # ------------------------------------------------------------------------------
-@router_auth.post("/register", name="auth.register")
+@router_auth_api.post("/register", name="auth.register")
 async def register_api(
     request: Request,
     session: CurrentSession,
@@ -113,7 +113,7 @@ async def register_api(
 # ==============================================================================
 # ++++++++++++++++++++++++++++++++++ login API +++++++++++++++++++++++++++++++++
 # ------------------------------------------------------------------------------
-@router_auth.post("/login", name="auth.login")
+@router_auth_api.post("/login", name="auth.login")
 async def login_api(
     request: Request,
     session: CurrentSession,
@@ -156,7 +156,7 @@ async def login_api(
 # ==============================================================================
 # ++++++++++++++++++++++++++++++++++ logout API ++++++++++++++++++++++++++++++++
 # ------------------------------------------------------------------------------
-@router_auth.post("/logout", name="auth.logout")
+@router_auth_api.post("/logout", name="auth.logout")
 async def logout_api(request: Request):
     await validate_csrf_header(request)
     logout_user(request)
@@ -166,12 +166,12 @@ async def logout_api(request: Request):
 # ==============================================================================
 # ++++++++++++++++++++++++++++++++ account API +++++++++++++++++++++++++++++++++
 # ------------------------------------------------------------------------------
-@router_auth.get("/account", name="auth.account_get")
+@router_auth_api.get("/account", name="auth.account_get")
 async def account_get_api(request: Request, _user=Depends(require_login_api)):
     return {"user": user_out(get_request_user(request)).model_dump()}
 
 
-@router_auth.post("/account", name="auth.account_post")
+@router_auth_api.post("/account", name="auth.account_post")
 async def account_post_api(
     request: Request,
     session: CurrentSession,

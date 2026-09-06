@@ -28,7 +28,7 @@ auth.ts                      # login/register/logout/account поверх client
 
 ## 1. Приложение поднимает сессии и middleware
 
-`md_articles/frontend_auth_include.py` — функция `setup_auth_static_include`,
+`md_articles/frontend_auth_include.py` — функция `include_router_api_frontend`,
 вызывается из `main.py`:
 
 ```python

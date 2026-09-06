@@ -9,7 +9,7 @@
      до (но не включая) `# sections API`. Удалено: `csrf_token`, `current_user`,
      `register_api`, `login_api`, `logout_api`, `account_get_api`, `account_post_api`.
 
-2. **`fastapi-application/md_articles/frontend_auth_include.py` — один edit:**
+2. **`../../../fastapi-application/md_articles/setup_frontend.py` — один edit:**
    - Добавлен импорт `from md_articles.api_auth import router_auth`.
    - После `app.include_router(router_blog_api)` добавлен
      `app.include_router(router_auth)`. Порядок: auth первым, blog вторым — оба

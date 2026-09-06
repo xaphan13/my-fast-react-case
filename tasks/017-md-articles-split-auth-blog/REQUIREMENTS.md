@@ -2,13 +2,13 @@
 
 Серверный рефакторинг пакета `md_articles`: выделить auth/account-роуты
 (`/api/blog/csrf`, `/current_user`, `/register`, `/login`, `/logout`,
-`/account` GET/POST) в отдельный файл `api_auth.py` с роутером `router_auth`,
+`/account` GET/POST) в отдельный файл `api_auth.py` с роутером `router_auth_api`,
 оставив в `api_blog.py` только блог-секции (`sections`, `articles`,
 `articles/{art_id}`, `art_manage`, `art_manage/add_all`, `art_manage/meta`,
 `art_manage/sync`). Дополнительно — переименовать `auth_middleware_helpers.py`
 в `middleware_auth.py` через `git mv` (история сохраняется); в нём оставить
 только 4 функции (секции 1–3 до строки 135 включительно: middleware,
-`auth_add_middleware`, `custom_request_validation_exception_handler`); всё
+`add_middleware_auth`, `custom_request_validation_exception_handler`); всё
 ниже строки 135 (`login_user`/`logout_user`, `hash_password`/`verify_password`,
 CSRF-хелперы, `require_login_api`, `_validation_response`, error-константы)
 перенести в `helpers_blog.py`. URL-неймспейс `/api/blog` сохраняется,
@@ -27,7 +27,7 @@ CSRF-хелперы, `require_login_api`, `_validation_response`, error-конс
    роутов сохраняются (`blog_api.sections` и т.п.).
 4. `auth_middleware_helpers.py` → `middleware_auth.py` через `git mv`.
    В файле остаются 4 функции: `inject_current_user_middleware` (строка 35),
-   `get_current_user` (58), `auth_add_middleware` (76),
+   `get_current_user` (58), `add_middleware_auth` (76),
    `custom_request_validation_exception_handler` (114). Это секции 1–3,
    до строки 135 включительно.
 5. `helpers_blog.py` дополняется 5 секциями из `auth_middleware_helpers.py`
@@ -37,16 +37,16 @@ CSRF-хелперы, `require_login_api`, `_validation_response`, error-конс
    `_get_request_user` (191), `require_login_api` (195),
    `_ERROR_EMAIL_TAKEN` (204), `_ERROR_USERNAME_TAKEN` (205),
    `_validation_response` (208+).
-6. `frontend_auth_include.py`: минимальная правка — обновить импорт
-   `auth_add_middleware` (из `auth_middleware_helpers` → `middleware_auth`)
+6. `setup_frontend.py`: минимальная правка — обновить импорт
+   `add_middleware_auth` (из `auth_middleware_helpers` → `middleware_auth`)
    и добавить `app.include_router(router_auth)` рядом с
    `include_router(router_blog_api)`. Логика подключения не меняется.
 7. `main.py` не трогаем — оба роутера подключаются через
-   `setup_auth_static_include`.
+   `include_router_api_frontend`.
 8. `__init__.py` пакета — обновить module-docstring под новую структуру
    (заменить упоминание `auth_middleware_helpers.py` на `middleware_auth.py`,
-   добавить `api_auth.py`). Реэкспорт `router_auth` не нужен:
-   `frontend_auth_include.py` импортирует его напрямую из
+   добавить `api_auth.py`). Реэкспорт `router_auth_api` не нужен:
+   `setup_frontend.py` импортирует его напрямую из
    `md_articles.api_auth`. `_user_out` и `UserOut` уже живут в
    `helpers_blog.py` — перенос не требуется.
 
@@ -60,7 +60,7 @@ CSRF-хелперы, `require_login_api`, `_validation_response`, error-конс
 После задания в репозитории:
 
 - `fastapi-application/md_articles/api_auth.py` — новый файл, содержит
-  `router_auth` с 7 роутами (`csrf`, `current_user`, `register`, `login`,
+  `router_auth_api` с 7 роутами (`csrf`, `current_user`, `register`, `login`,
   `logout`, `account_get`, `account_post`).
 - `fastapi-application/md_articles/api_blog.py` — почищен: только 7 блог-роутов
   (`sections`, `articles`, `articles/{art_id}`, `art_manage`,
@@ -69,7 +69,7 @@ CSRF-хелперы, `require_login_api`, `_validation_response`, error-конс
 - `fastapi-application/md_articles/middleware_auth.py` — переименован из
   `auth_middleware_helpers.py` через `git mv` (история сохраняется);
   содержит только 4 функции: `inject_current_user_middleware`,
-  `get_current_user`, `auth_add_middleware`,
+  `get_current_user`, `add_middleware_auth`,
   `custom_request_validation_exception_handler`. Module-docstring обновлён
   под новое содержимое.
 - `fastapi-application/md_articles/helpers_blog.py` — дополнен 5 секциями
@@ -77,8 +77,8 @@ CSRF-хелперы, `require_login_api`, `_validation_response`, error-конс
   validation handler); добавлены импорты: `bcrypt`,
   `from fastapi import HTTPException, Request`,
   `from fastapi.responses import JSONResponse`.
-- `fastapi-application/md_articles/frontend_auth_include.py` — импорт
-  `auth_add_middleware` обновлён на `middleware_auth`; добавлен
+- `../../fastapi-application/md_articles/setup_frontend.py` — импорт
+  `add_middleware_auth` обновлён на `middleware_auth`; добавлен
   `app.include_router(router_auth)`.
 - `fastapi-application/md_articles/__init__.py` — module-docstring обновлён
   под новую структуру.
@@ -110,10 +110,10 @@ CSRF-хелперы, `require_login_api`, `_validation_response`, error-конс
 
 | # | Фаза | Исполнитель | Файлы | Что делает | Checkpoint | Бюджет |
 |---|---|---|---|---|---|---|
-| 1 | Создать api_auth.py | backend-dev | `md_articles/api_auth.py` (новый) | Создать файл с `router_auth` и 7 auth-роутами; импорты из существующих `auth_middleware_helpers` и `helpers_blog` | `python -c "from md_articles.api_auth import router_auth; print(len(router_auth.routes))"` → 7; `ruff check api_auth.py` → exit 0 | ~12 |
+| 1 | Создать api_auth.py | backend-dev | `md_articles/api_auth.py` (новый) | Создать файл с `router_auth_api` и 7 auth-роутами; импорты из существующих `auth_middleware_helpers` и `helpers_blog` | `python -c "from md_articles.api_auth import router_auth; print(len(router_auth.routes))"` → 7; `ruff check api_auth.py` → exit 0 | ~12 |
 | 2 | Очистить api_blog.py + подключить router_auth | backend-dev | `md_articles/api_blog.py`, `md_articles/frontend_auth_include.py` | Удалить 7 auth-роутов и неиспользуемые импорты из api_blog.py; в frontend_auth_include.py добавить `include_router(router_auth)` | `len(main_app.routes) == 42`; curl `/api/blog/articles` 200, `/api/blog/csrf` 200, `POST /api/blog/login` 422; `ruff check` clean | ~10 |
 | 3 | Расщепить helpers | backend-dev | `md_articles/auth_middleware_helpers.py`, `md_articles/helpers_blog.py`, `md_articles/api_auth.py` | Перенести секции ниже строки 135 в helpers_blog.py; обновить импорт-блок api_auth.py; обновить docstring auth_middleware_helpers.py | импорты из обоих модулей разрешаются; `len(main_app.routes) == 42`; curl всех auth-эндпоинтов; `ruff check` clean | ~12 |
-| 4 | Переименовать файл + обновить импорты + docstring | backend-dev | `git mv auth_middleware_helpers.py → middleware_auth.py`; `md_articles/frontend_auth_include.py`; `md_articles/__init__.py` | git mv; обновить импорт `auth_add_middleware`; обновить module-docstring пакета | `len(main_app.routes) == 42`; `ruff check` clean; `ruff format --check` clean; `git status` показывает только ожидаемые изменения | ~10 |
+| 4 | Переименовать файл + обновить импорты + docstring | backend-dev | `git mv auth_middleware_helpers.py → middleware_auth.py`; `md_articles/frontend_auth_include.py`; `md_articles/__init__.py` | git mv; обновить импорт `add_middleware_auth`; обновить module-docstring пакета | `len(main_app.routes) == 42`; `ruff check` clean; `ruff format --check` clean; `git status` показывает только ожидаемые изменения | ~10 |
 
 ### Фаза 1: Создать api_auth.py
 
@@ -154,7 +154,7 @@ CSRF-хелперы, `require_login_api`, `_validation_response`, error-конс
 - Checkpoint (машинные, без поднятия сервера):
   - `cd fastapi-application && ../.venv/bin/python -c "from md_articles.api_auth import router_auth; print(len(router_auth.routes))"` → `7`
   - `uv run ruff check fastapi-application/md_articles/api_auth.py` → exit 0
-- Готовность фазы: файл существует, импорт проходит, `router_auth` содержит
+- Готовность фазы: файл существует, импорт проходит, `router_auth_api` содержит
   ровно 7 роутов, ruff чист.
 
 ### Фаза 2: Очистить api_blog.py + подключить router_auth
@@ -162,7 +162,7 @@ CSRF-хелперы, `require_login_api`, `_validation_response`, error-конс
 - Файлы:
   - `fastapi-application/md_articles/api_blog.py` (edit: убрать 7 auth-роутов
     и неиспользуемые импорты)
-  - `fastapi-application/md_articles/frontend_auth_include.py` (edit: добавить
+  - `../../fastapi-application/md_articles/setup_frontend.py` (edit: добавить
     `include_router(router_auth)`)
 - Контракт:
   - В `api_blog.py` остаются 7 роутов: `sections`, `articles`,
@@ -189,7 +189,7 @@ CSRF-хелперы, `require_login_api`, `_validation_response`, error-конс
       `get_section`, `render_article`, `save_articles`, `scan_content_art`,
       `sync_registry_with_disk`, `SectionOut`. (`UserOut` используется
       в type hint — НЕ удалять; проверить по факту после edit.)
-  - В `frontend_auth_include.py`:
+  - В `setup_frontend.py`:
     - добавить `from md_articles.api_auth import router_auth` рядом с
       импортом `router_blog_api`.
     - добавить `app.include_router(router_auth)` сразу после
@@ -200,7 +200,7 @@ CSRF-хелперы, `require_login_api`, `_validation_response`, error-конс
      `cd fastapi-application && ../.venv/bin/uvicorn main:main_app --port 8000 &`.
   2. В `api_blog.py` удалить 7 auth-роутов и неиспользуемые импорты одним
      блоком (правка крупная — единым edit, не несколько).
-  3. В `frontend_auth_include.py` добавить импорт `router_auth` и
+  3. В `setup_frontend.py` добавить импорт `router_auth_api` и
      `include_router`.
   4. Прогнать Checkpoint-curl.
   5. Если сервер поднимали сами — оставить работать для последующих фаз
@@ -231,12 +231,12 @@ CSRF-хелперы, `require_login_api`, `_validation_response`, error-конс
   - `auth_middleware_helpers.py` после правки:
     - module-docstring: убрать упоминания CSRF, `require_login_api`,
       `login_user`/`logout_user`, password, login dependency,
-      validation handler; оставить только middleware, `auth_add_middleware`,
+      validation handler; оставить только middleware, `add_middleware_auth`,
       `custom_request_validation_exception_handler`.
     - импорты: удалить `bcrypt` (больше не используется в этом файле);
       проверить, что остальные импорты всё ещё нужны.
     - 4 функции: `inject_current_user_middleware`, `get_current_user`,
-      `auth_add_middleware`, `custom_request_validation_exception_handler`.
+      `add_middleware_auth`, `custom_request_validation_exception_handler`.
   - `helpers_blog.py` дополняется 5 секциями (после существующих):
     - auth helpers: `login_user`, `logout_user`
     - password helpers: `hash_password`, `verify_password`
@@ -278,24 +278,24 @@ CSRF-хелперы, `require_login_api`, `_validation_response`, error-конс
 
 - Файлы:
   - `git mv fastapi-application/md_articles/auth_middleware_helpers.py fastapi-application/md_articles/middleware_auth.py`
-  - `fastapi-application/md_articles/frontend_auth_include.py` (edit:
-    обновить импорт `auth_add_middleware`)
+  - `../../fastapi-application/md_articles/setup_frontend.py` (edit:
+    обновить импорт `add_middleware_auth`)
   - `fastapi-application/md_articles/__init__.py` (edit: обновить
     module-docstring)
 - Контракт:
   - Файл переименован через `git mv` (история сохраняется; rename
     детектится автоматически).
-  - `frontend_auth_include.py`:
+  - `setup_frontend.py`:
     `from md_articles.auth_middleware_helpers import auth_add_middleware` →
     `from md_articles.middleware_auth import auth_add_middleware`.
-    Логика функции `setup_auth_static_include` не меняется.
+    Логика функции `include_router_api_frontend` не меняется.
   - `__init__.py`: module-docstring обновлён —
     `auth_middleware_helpers.py` → `middleware_auth.py`, добавлен пункт про
     `api_auth.py` (новый JSON-роутер auth/account под тем же префиксом).
     Реэкспорты не меняются (`__all__` остаётся прежним).
 - Шаги:
   1. `git mv fastapi-application/md_articles/auth_middleware_helpers.py fastapi-application/md_articles/middleware_auth.py`.
-  2. В `frontend_auth_include.py` обновить одну строку импорта.
+  2. В `setup_frontend.py` обновить одну строку импорта.
   3. В `__init__.py` обновить module-docstring (только текст, без правок
      `__all__`).
   4. Финальный smoke (Checkpoint).
@@ -381,10 +381,10 @@ CSRF-хелперы, `require_login_api`, `_validation_response`, error-конс
 
 | Файл | Суть правки |
 |---|---|
-| `fastapi-application/md_articles/api_auth.py` (новый) | `router_auth` (prefix `/api/blog`, tags `auth`) с 7 роутами: `csrf`, `current_user`, `register`, `login`, `logout`, `account_get`, `account_post`. Тела 1:1 из старого `api_blog.py`, имена `auth.*`. |
+| `fastapi-application/md_articles/api_auth.py` (новый) | `router_auth_api` (prefix `/api/blog`, tags `auth`) с 7 роутами: `csrf`, `current_user`, `register`, `login`, `logout`, `account_get`, `account_post`. Тела 1:1 из старого `api_blog.py`, имена `auth.*`. |
 | `fastapi-application/md_articles/api_blog.py` (edit) | Удалены 7 auth-роутов и неиспользуемые импорты (`File`, `Form`, `UploadFile`, `LoginIn`, `RegisterIn`, `CurrentSession`, `select`, `hash_password`, `verify_password`, `login_user`, `logout_user`, `_ERROR_EMAIL_TAKEN`, `_ERROR_USERNAME_TAKEN`, `_ensure_csrf_token`, `_get_request_user`, `_validation_response`, `validate_csrf_form`, `_user_out`, `_is_valid_email`, `_username_exists`, `_email_exists`, `_save_picture`, `BlogUser`); импорт `require_login_api`/`validate_csrf_header` переключён с `auth_middleware_helpers` на `helpers_blog`. Длина: 408 → 224 строк. |
-| `fastapi-application/md_articles/frontend_auth_include.py` (edit) | Добавлен импорт `router_auth`; добавлен `app.include_router(router_auth)` рядом с `include_router(router_blog_api)`. |
-| `fastapi-application/md_articles/auth_middleware_helpers.py` → `middleware_auth.py` (`git mv`) | Удалены 5 секций (12 имён): `login_user`, `logout_user`, `hash_password`, `verify_password`, `_ensure_csrf_token`, `validate_csrf_form`, `validate_csrf_header`, `_get_request_user`, `require_login_api`, `_ERROR_EMAIL_TAKEN`, `_ERROR_USERNAME_TAKEN`, `_validation_response`. Удалены `bcrypt` и `HTTPException` из импортов. Осталось 4 функции: `inject_current_user_middleware`, `get_current_user`, `auth_add_middleware`, `custom_request_validation_exception_handler`. Длина: 222 → 132 строки. |
+| `../../fastapi-application/md_articles/setup_frontend.py` (edit) | Добавлен импорт `router_auth_api`; добавлен `app.include_router(router_auth)` рядом с `include_router(router_blog_api)`. |
+| `fastapi-application/md_articles/auth_middleware_helpers.py` → `middleware_auth.py` (`git mv`) | Удалены 5 секций (12 имён): `login_user`, `logout_user`, `hash_password`, `verify_password`, `_ensure_csrf_token`, `validate_csrf_form`, `validate_csrf_header`, `_get_request_user`, `require_login_api`, `_ERROR_EMAIL_TAKEN`, `_ERROR_USERNAME_TAKEN`, `_validation_response`. Удалены `bcrypt` и `HTTPException` из импортов. Осталось 4 функции: `inject_current_user_middleware`, `get_current_user`, `add_middleware_auth`, `custom_request_validation_exception_handler`. Длина: 222 → 132 строки. |
 | `fastapi-application/md_articles/helpers_blog.py` (edit) | Добавлены 5 секций (12 имён) сверху вниз: auth helpers, password helpers, CSRF helpers, login dependency, validation handler. Добавлены импорты: `bcrypt`, `from fastapi import HTTPException, Request`, `from fastapi.responses import JSONResponse`. Длина: 100 → 181 строки. |
 | `fastapi-application/md_articles/__init__.py` (edit) | Module-docstring переписан: `auth_middleware_helpers.py` → `middleware_auth.py`, добавлен пункт про `api_auth.py` (7 эндпоинтов), `api_blog.py` теперь с числом 7 (было 13). `__all__` без изменений. |
 
@@ -398,7 +398,7 @@ CSRF-хелперы, `require_login_api`, `_validation_response`, error-конс
 | 4 | `from md_articles.middleware_auth import ...` (4 имени) | PASS | e2e/qa_block1_imports.log |
 | 5 | `from md_articles.auth_middleware_helpers import ...` → ModuleNotFoundError | PASS | e2e/qa_block1_imports.log |
 | 6 | `from md_articles.helpers_blog import (12 имён)` | PASS | e2e/qa_block1_imports.log |
-| 7 | Имена `router_auth` = 7 auth.* | PASS | e2e/qa_block2_route_names.log |
+| 7 | Имена `router_auth_api` = 7 auth.* | PASS | e2e/qa_block2_route_names.log |
 | 8 | Имена `router_blog_api` = 7 blog_api.* | PASS | e2e/qa_block2_route_names.log |
 | 9 | `uv run ruff check .` → exit 0 | PASS | e2e/qa_block3_lint.log |
 | 10 | `uv run ruff format --check .` → no changes | PASS | e2e/qa_block3_lint.log |

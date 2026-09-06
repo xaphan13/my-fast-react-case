@@ -89,7 +89,7 @@ React, который добавляет SSR/SSG из коробки; в нём 
 
 Два независимых слоя маршрутов в одном процессе.
 
-**Слой 1: SPA catch-all** — `fastapi-application/frontend_routing.py`:
+**Слой 1: SPA catch-all** — `../fastapi-application/md_articles/frontend_routing.py`:
 
 ```python
 from fastapi import FastAPI, Request
@@ -1198,7 +1198,7 @@ nginx (TLS, порт 443)
     └── /static   → FastAPI (аватары)
 ```
 
-SPA catch-all в `fastapi-application/frontend_routing.py` нужно **убрать** —
+SPA catch-all в `../fastapi-application/md_articles/frontend_routing.py` нужно **убрать** —
 теперь `/{full_path:path}` обрабатывает Node-сервер, а не FastAPI. Если
 оставить — Node-сервер будет получать 404 от FastAPI на свежий заход и
 отдавать JSON вместо HTML.
@@ -1222,7 +1222,7 @@ SPA catch-all в `fastapi-application/frontend_routing.py` нужно **убра
 | остальные `src/pages/*.tsx` | обычные | перенос в `pages/.../*.tsx` | по 30 минут |
 | `pages/*/+data.ts` | — | новый файл на каждый роут (загрузка данных) | по 30 минут |
 | `frontend/entry-client.tsx` | — | 3 строки | 5 минут |
-| `fastapi-application/frontend_routing.py` | catch-all + `/assets` mount | удалить catch-all и `/assets` mount | 10 минут |
+| `../fastapi-application/md_articles/frontend_routing.py` | catch-all + `/assets` mount | удалить catch-all и `/assets` mount | 10 минут |
 | `fastapi-application/main.py` | без изменений | без изменений | 0 |
 | nginx-конфиг | проксирует всё в FastAPI | проксирует `/` и `/assets` в Node, `/api/*` в FastAPI | 1 час |
 

@@ -16,7 +16,7 @@
 | 2. Клиентский (react-router) | то же, что (1) | React Router (history-mode) | `frontend/src/App.tsx` |
 | 3. Машинный (API) | `/api/blog/articles`, `/api/blog/articles/123`, `/api/blog/sections`, `/api/blog/login`, `/api/blog/account`, `/api/blog/csrf`, `/api/blog/current_user` | JavaScript-код (fetch) | `frontend/src/api/*.ts` |
 | 4. Серверный (FastAPI-роутер) | то же, что (3) | FastAPI-роутер | `fastapi-application/md_articles/api_blog.py` |
-| 5. Серверный (catch-all) | `/{full_path:path}` | любой GET, не начинающийся с `/api` | `fastapi-application/frontend_routing.py` |
+| 5. Серверный (catch-all) | `/{full_path:path}` | любой GET, не начинающийся с `/api` | `../fastapi-application/md_articles/frontend_routing.py` |
 
 **Связь между слоями:**
 
@@ -634,7 +634,7 @@ async def article_detail(art_id: int):
 URL `/api/blog/articles/abc` — придёт 422 (Pydantic-ошибка валидации
 типа), не 500. Этот механизм — часть FastAPI, не наша логика.
 
-**Подключение роутера** — `fastapi-application/md_articles/frontend_auth_include.py`:
+**Подключение роутера** — `../fastapi-application/md_articles/setup_frontend.py`:
 
 ```python
 from fastapi import FastAPI
@@ -707,7 +707,7 @@ async def art_manage_get(request: Request):
 Это не относится к `articles_list` (там current_user не нужен — статьи
 публичные), но полезно для управляющих эндпоинтов.
 
-**`SessionMiddleware`** добавляется в `auth_add_middleware`:
+**`SessionMiddleware`** добавляется в `add_middleware_auth`:
 
 ```python
 app.add_middleware(
@@ -774,7 +774,7 @@ API и фронтенд живут на одном origin (`127.0.0.1:8000`). Б
 
 ## 5. Слой 5. Серверный catch-all — кто отдаёт index.html
 
-**`fastapi-application/frontend_routing.py`** — модуль, который
+**`../fastapi-application/md_articles/frontend_routing.py`** — модуль, который
 подключает собранный фронт:
 
 ```python
@@ -856,8 +856,8 @@ def setup_react_routing_assets(app: FastAPI) -> None:
 **`fastapi-application/main.py`** — порядок подключения критичен:
 
 ```python
-from md_articles.frontend_auth_include import setup_auth_static_include
-from frontend_routing import setup_react_routing_assets
+from md_articles.setup_frontend import include_router_api_frontend
+from md_articles.frontend_routing import mount_vite_react_assets
 
 # 1. Доменные роутеры (/api/v1, /users, /orders)
 app.include_router(router_api)
@@ -865,13 +865,13 @@ app.include_router(r_users_sql)
 app.include_router(r_order_one)
 
 # 2. Блог: auth, /static, /api/blog/*
-setup_auth_static_include(main_app)
+include_router_api_frontend(main_app)
 
 # 3. SPA: /assets + catch-all. СТРОГО последним.
-setup_react_routing_assets(main_app)
+mount_vite_react_assets(main_app)
 ```
 
-Если переставить `setup_react_routing_assets` **до** блога — catch-all
+Если переставить `mount_vite_react_assets` **до** блога — catch-all
 добавится раньше `router_blog_api` и `/api/blog/*` сломается.
 
 ---

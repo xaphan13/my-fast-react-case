@@ -1,7 +1,7 @@
 """
 Пакет блога `md_articles`.
 
-  - `frontend_auth_include.py` — публичный API подключения:
+  - `setup_frontend.py` — публичный API подключения:
     `setup_auth_static_include(app)` (вызывается из `main.py`).
   - `middleware_auth.py` — middleware-слой авторизации:
     `auth_add_middleware`, `inject_current_user_middleware`,
@@ -19,7 +19,3 @@
     статей с mtime-кэшем и атомарной записью.
   - `models.py` — SQLAlchemy-модели `BlogUser`, `BlogPost`.
 """
-
-from md_articles.frontend_auth_include import setup_auth_static_include
-
-__all__ = ["setup_auth_static_include"]

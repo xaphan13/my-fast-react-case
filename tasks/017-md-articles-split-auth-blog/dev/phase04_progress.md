@@ -18,8 +18,8 @@
 
 ## Шаги
 
-1. Прочитан `frontend_auth_include.py` (41 строка) — единственный
-   потребитель `auth_add_middleware`.
+1. Прочитан `setup_frontend.py` (41 строка) — единственный
+   потребитель `add_middleware_auth`.
 2. Прочитан `__init__.py` (18 строк) — module-docstring с перечислением
    модулей пакета.
 3. Прочитан `phase03_progress.md` — контекст.
@@ -27,7 +27,7 @@
 5. `git mv fastapi-application/md_articles/auth_middleware_helpers.py
        fastapi-application/md_articles/middleware_auth.py` → `git status`
    показывает `RM auth_middleware_helpers.py -> middleware_auth.py`.
-6. `frontend_auth_include.py`: 2 правки —
+6. `setup_frontend.py`: 2 правки —
    - docstring: `auth_middleware_helpers.py` → `middleware_auth.py`;
    - import: `from md_articles.auth_middleware_helpers import
      auth_add_middleware` → `from md_articles.middleware_auth import
@@ -45,16 +45,16 @@
 ## Что изменилось в module-docstring `__init__.py`
 
 До (4 пункта):
-- `frontend_auth_include.py`
+- `setup_frontend.py`
 - `auth_middleware_helpers.py` — «вся авторизация в одном файле» с
   длинным списком имён
 - `api_blog.py` (13 эндпоинтов)
 - `schema_art.py`, `models.py`
 
 После (6 пунктов):
-- `frontend_auth_include.py`
+- `setup_frontend.py`
 - `middleware_auth.py` — middleware-слой: 4 имени
-  (`auth_add_middleware`, `inject_current_user_middleware`,
+  (`add_middleware_auth`, `inject_current_user_middleware`,
   `custom_request_validation_exception_handler`, `get_current_user`)
 - `helpers_blog.py` — бизнес-хелперы (CSRF, `require_login_api`,
   `_user_out`, `UserOut`, ...)

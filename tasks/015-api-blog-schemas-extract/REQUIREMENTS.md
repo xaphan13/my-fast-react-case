@@ -15,7 +15,7 @@
 
 `_user_out` (стр. ~95–100) — **не выносится**, остаётся в `api_blog.py` (это форматтер-функция, не схема).
 
-`schema_art.py`, `models.py`, `auth_middleware_helpers.py`, `frontend_auth_include.py`,
+`schema_art.py`, `models.py`, `auth_middleware_helpers.py`, `setup_frontend.py`,
 `__init__.py` — **не трогать**.
 
 ## Контракт (что должно получиться)

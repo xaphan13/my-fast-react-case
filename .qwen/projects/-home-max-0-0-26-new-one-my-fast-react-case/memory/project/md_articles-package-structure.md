@@ -6,7 +6,7 @@ type: project
 
 В `fastapi-application/md_articles/` три разнородных слоя разнесены по разным файлам (названия длинные — осознанно, для полной самодокументации):
 
-- `frontend_auth_include.py` — plug-in блога: `setup_auth_static_include(app)` (вызывает `auth_add_middleware`, монтирует `/static`, подключает `router_blog_api`).
+- `setup_frontend.py` — plug-in блога: `setup_auth_static_include(app)` (вызывает `add_middleware_auth`, монтирует `/static`, подключает `router_blog_api`).
 - `auth_middleware_helpers.py` — ВСЯ авторизация в одном файле: `auth_add_middleware(app)` (`add_middleware(BaseHTTPMiddleware, dispatch=inject_current_user_middleware)`, `add_middleware(SessionMiddleware, ...)`, `add_exception_handler(RequestValidationError, custom_request_validation_exception_handler)`), плюс CSRF/`require_login_api`/сессионные/парольные хелперы.
 - `api_blog.py` — только роуты + `UserOut` + `_user_out`.
 - (старый `web_utils.py` удалён).

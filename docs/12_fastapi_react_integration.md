@@ -132,7 +132,7 @@ FastAPI в этой картине умеет две независимые ро
 ## 4. Как это устроено конкретно в этом проекте (кратко)
 
 - **Эксплуатация** — способ A: `frontend/dist/` собирается `npm run build`,
-  [`frontend_routing.py`](../fastapi-application/frontend_routing.py) монтирует `/assets`
+  [`frontend_routing.py`](../fastapi-application/md_articles/frontend_routing.py) монтирует `/assets`
   и отдаёт `dist/index.html` через catch-all; `/api/blog/*` — JSON API. Один
   процесс FastAPI обслуживает всё.
 - **Разработка** — временно способ B-подобный: Vite на `:5173` отдаёт исходники
