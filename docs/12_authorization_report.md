@@ -70,9 +70,9 @@ Starlette `SessionMiddleware` реализует паттерн **client-side se
 вызывается из `main.py`:
 
 ```python
-def setup_auth_static_include(app: FastAPI) -> None:
+def include_router_api_frontend(app: FastAPI) -> None:
     """Подключает блог к FastAPI: авторизация, статика, JSON-роутер."""
-    logF.info("setup_auth_static_include: подключение auth, /static, router_blog_api")
+    logF.info("include_router_api_frontend: подключение auth, /static, router_blog_api")
 
     auth_add_middleware(app)
 
@@ -728,7 +728,7 @@ origin один, микросервисов нет.
 fastapi-application/
 ├── core/config.py                       # WebConfig.secret_key (подпись cookie)
 ├── md_articles/
-│   ├── frontend_auth_include.py         # setup_auth_static_include(): middleware + static + router
+│   ├── frontend_auth_include.py         # include_router_api_frontend(): middleware + static + router
 │   ├── auth_middleware_helpers.py       # auth_add_middleware, current_user-middleware,
 │   │                                    #   CSRF-хелперы, hash_password/verify_password (bcrypt)
 │   ├── models.py                        # BlogUser (blog_user): password = bcrypt-хеш
@@ -744,7 +744,7 @@ frontend/src/api/
 
 | Что | Файл |
 |---|---|
-| Подключение блога (middleware + static + JSON API) | `md_articles/frontend_auth_include.py::setup_auth_static_include` |
+| Подключение блога (middleware + static + JSON API) | `md_articles/frontend_auth_include.py::include_router_api_frontend` |
 | `add_middleware_auth`: `SessionMiddleware` + current_user-middleware + exception handler | `md_articles/auth_middleware_helpers.py::auth_add_middleware` |
 | Сессия: login/logout/get_current_user + bcrypt | `md_articles/auth_middleware_helpers.py` (login_user/logout_user/get_current_user, hash_password/verify_password) |
 | CSRF: генерация + 2 валидатора | `md_articles/auth_middleware_helpers.py::_ensure_csrf_token`, `validate_csrf_header`, `validate_csrf_form` |

@@ -17,8 +17,8 @@
 │                   JSON-запросы к /api/blog, cookie-сессии         │
 ├──────────────────────────────────────────────────────────────────┤
 │  Композиция       create_fastapi.create_app() → main.main_app     │
-│                   include_router × 3 + setup_auth_static_include +    │
-│                   setup_react_routing_assets (mount /assets, SPA catch-all),       │
+│                   include_router × 3 + include_router_api_frontend +    │
+│                   mount_vite_react_assets (mount /assets, SPA catch-all),       │
 │                   lifespan                                       │
 ├──────────────────────────────────────────────────────────────────┤
 │  Presentation     APIRouter'ы; pydantic-схемы запросов/ответов    │
@@ -74,7 +74,7 @@ def create_app(custom_docs_url: bool = False) -> FastAPI:
     return app
 ```
 
-Фабрика параметризована одним флагом, переключающим встроенную документацию на кастомную (`utils/docs.py`). Каркас ограничен конструктором `FastAPI(...)` и `lifespan` — блог подключается **снаружи** в `main.py` через `setup_auth_static_include(main_app)` после доменных `include_router`. Это даёт два эффекта: (1) `create_app()` возвращает минимальный каркас без middleware блога — тестам удобно подключать только нужное; (2) в `main.py` виден полный «рецепт» приложения (домены → блог → SPA).
+Фабрика параметризована одним флагом, переключающим встроенную документацию на кастомную (`utils/docs.py`). Каркас ограничен конструктором `FastAPI(...)` и `lifespan` — блог подключается **снаружи** в `main.py` через `include_router_api_frontend(main_app)` после доменных `include_router`. Это даёт два эффекта: (1) `create_app()` возвращает минимальный каркас без middleware блога — тестам удобно подключать только нужное; (2) в `main.py` виден полный «рецепт» приложения (домены → блог → SPA).
 
 ### 2. Dependency Injection (основной паттерн проекта)
 

@@ -47,8 +47,8 @@
 
 `fastapi-application/create_fastapi.py` предоставляет фабрику `create_app()` с `lifespan`
 (engine создаётся на импорте, dispose — в shutdown). `main.py` собирает `main_app`,
-подключает три корневых роутера, вызывает `md_articles.setup_auth_static_include(main_app)`
-(сессии, статика `/static`, JSON-роутер блога) и затем `setup_react_routing_assets(main_app)`
+подключает три корневых роутера, вызывает `md_articles.include_router_api_frontend(main_app)`
+(сессии, статика `/static`, JSON-роутер блога) и затем `mount_vite_react_assets(main_app)`
 (детали — [`docs/11_md_articles.md`](docs/11_md_articles.md)):
 
 | Роутер | Модуль | Префикс | Что внутри |
@@ -81,8 +81,8 @@ my-fastapi-one/                 <- корень репозитория; здес
 ├── Makefile                     запуск uvicorn, alembic, docker network
 ├── pyproject.toml uv.lock       зависимости (uv) + конфиг ruff/black
 └── fastapi-application/         корень Python-приложения (= BASE_DIR)
-    ├── main.py                  main_app + подключение роутеров + setup_react_routing_assets() (SPA-слой в frontend_routing.py)
-    ├── frontend_routing.py      mount /assets + SPA catch-all + защита /api* (см. docs/13)
+    ├── main.py                  main_app + подключение роутеров + mount_vite_react_assets() (SPA-слой в setup_frontend.py)
+    ├── md_articles/setup_frontend.py  mount /assets + SPA catch-all + защита /api* (см. docs/13)
     ├── main_gunicorn.py         точка входа gunicorn (переиспользует main_app)
     ├── create_fastapi.py        фабрика create_app() + lifespan (блог подключается в main.py)
     ├── base_dir_path.py         DIR_CWD / BASE_DIR (Path)
@@ -120,7 +120,7 @@ my-fastapi-one/                 <- корень репозитория; здес
 | [`docs/10_ideas_testing_infra.md`](docs/10_ideas_testing_infra.md) | идеи развития: тесты, конфигурация, инфраструктура |
 | [`docs/11_md_articles.md`](docs/11_md_articles.md) | блог md_articles: архитектура, маршруты, JSON API для React SPA |
 | [`docs/12_fastapi_react_integration.md`](docs/12_fastapi_react_integration.md) | связка FastAPI + React: способы организации фронтенда, dev vs прод |
-| [`docs/13_frontend_spa_module.md`](docs/13_frontend_spa_module.md) | модуль `frontend_routing.py`: как код подключает собранный React, dev-режим без `dist/` |
+| [`docs/13_frontend_spa_module.md`](docs/13_frontend_spa_module.md) | модуль `setup_frontend.py`: как код подключает собранный React, dev-режим без `dist/` |
 | [`docs/14_create_fastapi_factory.md`](docs/14_create_fastapi_factory.md) | фабрика `create_app()` и `lifespan` в `create_fastapi.py`: каркас vs наполнение |
 | [`docs/15_md_articles_package.md`](docs/15_md_articles_package.md) | пакет `md_articles`: JSON API блога, реестр статей, сессии |
 

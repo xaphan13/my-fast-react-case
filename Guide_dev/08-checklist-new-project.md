@@ -25,10 +25,10 @@ uv add --dev ruff black
 1. `core/config.py` — `Settings(BaseSettings)` с префиксом `APP__`, вложенные
    модели, `env_file`-профили (sqlite для разработки, postgres для прода).
 2. `create_fastapi.py` — фабрика `create_app()` + `lifespan` (dispose движка в
-   shutdown). Каркас не знает про блог — `setup_auth_static_include(main_app)`
+   shutdown). Каркас не знает про блог — `include_router_api_frontend(main_app)`
    вызывается из `main.py`.
 3. `main.py` — `main_app = create_app()`, доменные `include_router`,
-   `setup_auth_static_include(main_app)`, `setup_react_routing_assets(main_app)`,
+   `include_router_api_frontend(main_app)`, `mount_vite_react_assets(main_app)`,
    `uvicorn.run(...)` в `__main__`.
 4. Логирование — dictConfig, файл + stdout, инициализация на импорте модуля.
 
@@ -132,7 +132,7 @@ cd frontend && npx tsc --noEmit               # типы фронтенда — 
 
 - [ ] uv + lock-файл, Python 3.12
 - [ ] `create_app()` + `lifespan`, конфиг в pydantic-settings (`APP__`)
-- [ ] Блог подключается через `setup_auth_static_include(main_app)` из `main.py`,
+- [ ] Блог подключается через `include_router_api_frontend(main_app)` из `main.py`,
       а не из `create_app()`
 - [ ] `CurrentSession` через Depends; SQL только в CRUD-слое
 - [ ] Модели реэкспортированы для Alembic; миграции в git

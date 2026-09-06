@@ -35,7 +35,7 @@
 ```
 fastapi-application/
 ├── md_articles/
-│   ├── __init__.py        # setup_auth_static_include(): SessionMiddleware, current_user-middleware, mount /static, router_blog_api
+│   ├── __init__.py        # include_router_api_frontend(): SessionMiddleware, current_user-middleware, mount /static, router_blog_api
 │   ├── api_blog.py        # JSON API /api/blog (13 эндпоинтов) + CSRF-хелперы + RequestValidationError-хендлер
 │   ├── schema_art.py      # ArticleLang (+section) + YAML-реестр (mtime-кэш, last-good-state, атомарная запись)
 │   ├── models.py          # BlogUser / BlogPost
@@ -101,7 +101,7 @@ frontend/                  # Отдельное React-приложение (св
 
 ## Архитектура и слои
 
-Подключение — `main.py` после доменных `include_router` и до `setup_react_routing_assets(main_app)` вызывает `setup_auth_static_include(main_app)`:
+Подключение — `main.py` после доменных `include_router` и до `mount_vite_react_assets(main_app)` вызывает `include_router_api_frontend(main_app)`:
 
 1. **middleware** `inject_current_user_middleware` — загружает `current_user`
    (по `session["user_id"]`) в `request.state`; поверх `SessionMiddleware`

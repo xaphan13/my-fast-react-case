@@ -1,20 +1,3 @@
-"""
-Middleware-слой авторизации блога `md_articles` —
-точка входа `auth_add_middleware(app)` и его обвязка.
-
-  - `auth_add_middleware(app)` — подключает `SessionMiddleware`,
-    HTTP-middleware `inject_current_user_middleware` и обработчик
-    `RequestValidationError` (`{"errors": ...}` под формы фронтенда).
-  - `inject_current_user_middleware` — кладёт `request.state.current_user`
-    на каждый запрос через короткую сессию БД.
-  - `get_current_user` — достаёт `BlogUser` из сессии и пишет в `request.state`.
-  - `custom_request_validation_exception_handler` — стандартный FastAPI
-    422 для не-блоговых путей, формат `{"errors": ...}` для `/api/blog/*`.
-
-Хелперы сессии, паролей, CSRF, login-зависимости и validation handler
-живут в `md_articles.helpers_auth`.
-"""
-
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse

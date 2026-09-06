@@ -41,7 +41,7 @@ import main
  │         CurrentSession = Annotated[AsyncSession, Depends(...)]
  │
  └─ 5. Роутеры: api, ex_user_post.router_users, ex_order_product.router_order_one,
-        md_articles (подключается в main.py через setup_auth_static_include)
+        md_articles (подключается в main.py через include_router_api_frontend)
        └─ на уровне модулей создаются APIRouter'ы и объекты-зависимости:
           path_reader     (cls_deps.py:48)
           access_required (cls_deps.py:92)
@@ -58,13 +58,13 @@ main_app = create_app(custom_docs_url=False)
 main_app.include_router(router_api)      # /api/v1/...
 main_app.include_router(r_users_sql)     # /users/...
 main_app.include_router(r_order_one)     # /orders/...
-setup_auth_static_include(main_app)
+include_router_api_frontend(main_app)
 #   ├─ middleware inject_current_user_middleware
 #   ├─ SessionMiddleware (cookie, 14 дней)
 #   ├─ mount /static (аватары)
 #   ├─ handler RequestValidationError → {errors} для /api/blog
 #   └─ include_router(router_blog_api)    # /api/blog/...
-setup_react_routing_assets(main_app)
+mount_vite_react_assets(main_app)
 #   ├─ mount /assets                      # frontend/dist/assets
 #   └─ catch-all /{full_path:path}        # SPA → dist/index.html
 ```
@@ -75,7 +75,7 @@ setup_react_routing_assets(main_app)
 
 ```
 main_app
-├── router_blog_api                  prefix=/api/blog  (из setup_auth_static_include в main.py)
+├── router_blog_api                  prefix=/api/blog  (из include_router_api_frontend в main.py)
 ├── router_api                       prefix=/api
 │   └── router_api_v1                prefix=/v1
 │       ├── router_dep_examples      prefix=/dep_examples

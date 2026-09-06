@@ -12,7 +12,7 @@
 ## 1. Зачем фабрика живёт в отдельном модуле
 
 `main.py` собирает приложение из роутеров (`include_router`), подключает блог
-`md_articles` через `setup_auth_static_include(main_app)` и монтирует React SPA
+`md_articles` через `include_router_api_frontend(main_app)` и монтирует React SPA
 (`mount_vite_react_assets`). Само конструирование `FastAPI` (заголовок, ответ по умолчанию,
 `lifespan`, маршруты документации) вынесено в `create_fastapi.py`, чтобы
 `main.py` оставался короткой «картой» того, что входит в приложение, а
@@ -26,7 +26,7 @@
   Swagger — это одна правка в одном файле, а не поиск по `main.py` /
   `main_gunicorn.py` / будущим CLI.
 - **`main.py` остаётся обзорным.** В нём видно, какие доменные роутеры
-  включены, что подключён блог через `setup_auth_static_include(main_app)` и
+  включены, что подключён блог через `include_router_api_frontend(main_app)` и
   что смонтирован SPA; всё это занимает ~30 строк. Если сюда же положить
   создание `FastAPI` + `lifespan` — карта приложения утонет в коде фабрики.
 - **Альтернативные точки входа переиспользуют `create_app()`.**
@@ -80,7 +80,7 @@ if custom_docs_url:
 
 ### Шаг 3 (зафиксированное решение)
 
-Фабрика не вызывает `setup_auth_static_include(app)` — это сделано в `main.py`.
+Фабрика не вызывает `include_router_api_frontend(app)` — это сделано в `main.py`.
 Каркас приложения (`create_app()`) отвечает только за создание `FastAPI`,
 `lifespan` и переключение документации; порядок подключения блога и SPA
 зафиксирован в `main.py`. Это решение описано ниже в разделе «Граница ответственности».
@@ -90,10 +90,10 @@ if custom_docs_url:
 - **Не подключает роутеры доменов.** `api/`, `ex_user_post/`,
   `ex_order_product/` — это `include_router` в `main.py`. Фабрика про
   них не знает.
-- **Не подключает блог.** `setup_auth_static_include(main_app)` живёт в
-  `main.py` после доменных `include_router` и до `setup_react_routing_assets(main_app)`.
+- **Не подключает блог.** `include_router_api_frontend(main_app)` живёт в
+  `main.py` после доменных `include_router` и до `mount_vite_react_assets(main_app)`.
   Подробности — в [`docs/11_md_articles.md`](11_md_articles.md).
-- **Не подключает SPA.** `frontend_routing.setup_react_routing_assets(main_app)` живёт в
+- **Не подключает SPA.** `md_articles.setup_frontend.mount_vite_react_assets(main_app)` живёт в
   `main.py` после `include_router_api_frontend`. См.
   [`docs/13_frontend_spa_module.md`](13_frontend_spa_module.md).
 - **Не запускает `uvicorn`.** Это дело `if __name__ == "__main__": main()`
@@ -134,8 +134,8 @@ engine SQLAlchemy. Без явного `dispose` процесс может «в�
 | Слой | Где | Что в нём |
 |---|---|---|
 | Каркас | `create_app()` | `FastAPI(...)`, `lifespan`, переключение `/docs`/`/redoc` |
-| Наполнение | `main.py` | `include_router` для `api/`, `ex_user_post/`, `ex_order_product/`, вызов `setup_auth_static_include(main_app)`, `mount_vite_react_assets` для React-фронта, запуск `uvicorn` |
-| Плагин | `md_articles.setup_auth_static_include` | middleware (сессии, current_user), mount `/static`, JSON-роутер `/api/blog` |
+| Наполнение | `main.py` | `include_router` для `api/`, `ex_user_post/`, `ex_order_product/`, вызов `include_router_api_frontend(main_app)`, `mount_vite_react_assets` для React-фронта, запуск `uvicorn` |
+| Плагин | `md_articles.include_router_api_frontend` | middleware (сессии, current_user), mount `/static`, JSON-роутер `/api/blog` |
 | Точка входа | `main.py::main()`, `main_gunicorn.py` | `uvicorn.run(...)`, `gunicorn main:main_app` |
 
 Порядок в `main.py` зафиксирован:
@@ -145,8 +145,8 @@ main_app = create_app(custom_docs_url=False)
 main_app.include_router(router_api)
 main_app.include_router(r_users_sql)
 main_app.include_router(r_order_one)
-setup_auth_static_include(main_app)   # middleware + mount /static + router_blog_api
-setup_react_routing_assets(main_app)  # mount /assets + SPA catch-all
+include_router_api_frontend(main_app)   # middleware + mount /static + router_blog_api
+mount_vite_react_assets(main_app)  # mount /assets + SPA catch-all
 ```
 
 Почему именно такой порядок:
@@ -183,7 +183,7 @@ setup_react_routing_assets(main_app)  # mount /assets + SPA catch-all
   (`SessionMiddleware`, `inject_current_user_middleware`) и **без**
   JSON-роутера `/api/blog`. Это намеренно: тесту нужна изоляция от
   блога, и фабрика её даёт.
-- Если тесту нужен блог, он вызывает `setup_auth_static_include(app)` сам —
+- Если тесту нужен блог, он вызывает `include_router_api_frontend(app)` сам —
   это обычная функция из `md_articles`, без побочных эффектов вне `app`.
 - Никаких глобальных side-effects, кроме создания `db_manager.engine`
   (это побочный эффект импорта `db_core.db_async` — отдельная тема,

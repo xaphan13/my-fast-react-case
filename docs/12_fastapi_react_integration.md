@@ -132,7 +132,7 @@ FastAPI в этой картине умеет две независимые ро
 ## 4. Как это устроено конкретно в этом проекте (кратко)
 
 - **Эксплуатация** — способ A: `frontend/dist/` собирается `npm run build`,
-  [`frontend_routing.py`](../fastapi-application/md_articles/frontend_routing.py) монтирует `/assets`
+  [`setup_frontend.py`](../fastapi-application/md_articles/setup_frontend.py) монтирует `/assets`
   и отдаёт `dist/index.html` через catch-all; `/api/blog/*` — JSON API. Один
   процесс FastAPI обслуживает всё.
 - **Разработка** — временно способ B-подобный: Vite на `:5173` отдаёт исходники
@@ -142,7 +142,7 @@ FastAPI в этой картине умеет две независимые ро
 - **Грабля режима A:** правки `frontend/src/` не видны пользователю до
   пересборки — после каждой задачи фронтенда обязательна контрольная сборка.
 
-Подробности про код в `frontend_routing.py` — почему именно три шага, почему
+Подробности про код в `setup_frontend.py` — почему именно три шага, почему
 catch-all добавляется в `router.routes` руками, как ведёт себя dev-режим без
 `dist/`, пошаговая трассировка запросов — в
 [`docs/13_frontend_spa_module.md`](13_frontend_spa_module.md).

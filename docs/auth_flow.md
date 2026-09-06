@@ -32,8 +32,8 @@ auth.ts                      # login/register/logout/account поверх client
 вызывается из `main.py`:
 
 ```python
-def setup_auth_static_include(app: FastAPI) -> None:
-    logF.info("setup_auth_static_include: подключение auth, /static, router_blog_api")
+def include_router_api_frontend(app: FastAPI) -> None:
+    logF.info("include_router_api_frontend: подключение auth, /static, router_blog_api")
 
     auth_add_middleware(app)
 

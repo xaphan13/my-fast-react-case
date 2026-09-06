@@ -61,7 +61,7 @@ def create_app(custom_docs_url: bool = False) -> FastAPI:
 объявлены устаревшими).
 
 **Блог (`md_articles`) подключается из `main.py`, не из фабрики.**
-`setup_auth_static_include(main_app)` вызывается после доменных `include_router`
+`include_router_api_frontend(main_app)` вызывается после доменных `include_router`
 и до mount-статики/catch-all — он добавляет `SessionMiddleware`,
 `inject_current_user_middleware`, mount `/static` (аватары), exception-handler
 для 422 и `router_blog_api`. Фабрика про блог ничего не знает: это позволяет
@@ -79,7 +79,7 @@ main_app.include_router(router_api)        # /api/v1/...  (демо-часть)
 main_app.include_router(r_users_sql)       # /users/...
 main_app.include_router(r_order_one)       # /orders/...
 
-setup_auth_static_include(main_app)             # блог: middleware + mount /static + router_blog_api
+include_router_api_frontend(main_app)             # блог: middleware + mount /static + router_blog_api
 
 main_app.mount(
     "/assets",

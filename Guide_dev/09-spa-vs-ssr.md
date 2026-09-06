@@ -46,7 +46,7 @@ React, который добавляет SSR/SSG из коробки; в нём 
    ┌──────────────────────────────────────────┐
    │ 1. GET /art/Max/123                      │
    │    FastAPI (catch-all в                  │
-   │    frontend_routing.py) → index.html     │
+   │    setup_frontend.py) → index.html     │
    └──────────────────────────────────────────┘
                        │
                        ▼
@@ -89,7 +89,7 @@ React, который добавляет SSR/SSG из коробки; в нём 
 
 Два независимых слоя маршрутов в одном процессе.
 
-**Слой 1: SPA catch-all** — `../fastapi-application/md_articles/frontend_routing.py`:
+**Слой 1: SPA catch-all** — `../fastapi-application/md_articles/setup_frontend.py`:
 
 ```python
 from fastapi import FastAPI, Request
@@ -118,7 +118,7 @@ async def spa_fallback(request: Request) -> FileResponse | JSONResponse:
     return FileResponse(INDEX_HTML)
 
 
-def setup_react_routing_assets(app: FastAPI) -> None:
+def mount_vite_react_assets(app: FastAPI) -> None:
     app.mount("/assets", StaticFiles(directory=ASSETS_DIR, check_dir=False))
     app.router.routes.append(
         Route("/{full_path:path}", spa_fallback, methods=["GET"])
@@ -1198,12 +1198,12 @@ nginx (TLS, порт 443)
     └── /static   → FastAPI (аватары)
 ```
 
-SPA catch-all в `../fastapi-application/md_articles/frontend_routing.py` нужно **убрать** —
+SPA catch-all в `../fastapi-application/md_articles/setup_frontend.py` нужно **убрать** —
 теперь `/{full_path:path}` обрабатывает Node-сервер, а не FastAPI. Если
 оставить — Node-сервер будет получать 404 от FastAPI на свежий заход и
 отдавать JSON вместо HTML.
 
-`mount("/assets", StaticFiles(...))` в `frontend_routing.py` тоже убирается:
+`mount("/assets", StaticFiles(...))` в `setup_frontend.py` тоже убирается:
 бандлы раздаёт Node-express из `frontend/dist/client/assets/` (Vike
 складывает клиентскую сборку отдельно от серверной).
 
@@ -1222,7 +1222,7 @@ SPA catch-all в `../fastapi-application/md_articles/frontend_routing.py` нуж
 | остальные `src/pages/*.tsx` | обычные | перенос в `pages/.../*.tsx` | по 30 минут |
 | `pages/*/+data.ts` | — | новый файл на каждый роут (загрузка данных) | по 30 минут |
 | `frontend/entry-client.tsx` | — | 3 строки | 5 минут |
-| `../fastapi-application/md_articles/frontend_routing.py` | catch-all + `/assets` mount | удалить catch-all и `/assets` mount | 10 минут |
+| `../fastapi-application/md_articles/setup_frontend.py` | catch-all + `/assets` mount | удалить catch-all и `/assets` mount | 10 минут |
 | `fastapi-application/main.py` | без изменений | без изменений | 0 |
 | nginx-конфиг | проксирует всё в FastAPI | проксирует `/` и `/assets` в Node, `/api/*` в FastAPI | 1 час |
 

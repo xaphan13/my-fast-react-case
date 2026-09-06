@@ -17,8 +17,8 @@
 
 ```
 md_articles/
-├── __init__.py                    # публичный API пакета (реэкспорт setup_auth_static_include)
-├── frontend_auth_include.py       # plug-in: setup_auth_static_include(app) — middleware + static + JSON API
+├── __init__.py                    # публичный API пакета (реэкспорт include_router_api_frontend)
+├── frontend_auth_include.py       # plug-in: include_router_api_frontend(app) — middleware + static + JSON API
 ├── auth_middleware_helpers.py     # вся авторизация: auth_add_middleware, current_user-middleware,
 │                                  #   CSRF-хелперы, hash_password/verify_password, require_login_api
 ├── api_blog.py                    # JSON-роутер /api/blog/* (13 эндпоинтов)
@@ -30,7 +30,7 @@ md_articles/
 | Файл | Зона | Что внутри |
 |---|---|---|
 | `__init__.py` | публичный API | реэкспорт `include_router_api_frontend` |
-| `setup_frontend.py` | plug-in | `setup_auth_static_include(app)` — подключает блог к FastAPI |
+| `setup_frontend.py` | plug-in | `include_router_api_frontend(app)` — подключает блог к FastAPI |
 | `auth_middleware_helpers.py` | безопасность | `auth_add_middleware(app)`, `inject_current_user_middleware`, CSRF-хелперы, `login_user`/`logout_user`, `hash_password`/`verify_password` (bcrypt), `require_login_api` |
 | `api_blog.py` | API | роутер `router_blog_api` (prefix `/api/blog`), pydantic-схемы запросов/ответов, `_user_out` (формат JSON-ответа) |
 | `schema_art.py` | данные | модель `ArticleLang`, чтение/запись `articles.yaml` с mtime-кэшем, рендер `.md` через `markdown()`, сканирование `content_art/` |
@@ -38,9 +38,9 @@ md_articles/
 
 ## 2. Точка входа — `setup_frontend.py`
 
-Публичный API пакета — единственная функция `setup_auth_static_include(app)`,
+Публичный API пакета — единственная функция `include_router_api_frontend(app)`,
 реэкспортированная в `md_articles/__init__.py`. Вызывается из `main.py` после
-доменных `include_router` и до `setup_react_routing_assets(main_app)`.
+доменных `include_router` и до `mount_vite_react_assets(main_app)`.
 
 `include_router_api_frontend` делает три вещи в строгом порядке:
 
@@ -48,7 +48,7 @@ md_articles/
    (подписанные cookie, 14 дней), `inject_current_user_middleware` и обработчик
    `RequestValidationError` для формата `{"errors": {field: [msgs]}}`.
 2. `app.mount("/static", StaticFiles(...))` — аватары из
-   `BASE_DIR/static/profile_pics/`. `check_dir=False` (аналогично `frontend_routing.py`)
+   `BASE_DIR/static/profile_pics/`. `check_dir=False` (аналогично `setup_frontend.py`)
    позволяет стартовать без каталога.
 3. `app.include_router(router_blog_api)` — JSON-роутер блога.
 

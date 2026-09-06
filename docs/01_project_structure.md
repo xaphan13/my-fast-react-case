@@ -40,8 +40,8 @@ my-fastapi-one/
 │       └── types.ts                 # User, Article, Section — типы контракта /api/blog
 ├── templates_qwen_agents/           # Комплект агентного режима из другого проекта — только пример
 ├── fastapi-application/             # Корень Python-приложения (= BASE_DIR)
-│   ├── main.py                      # Точка входа uvicorn; сборка main_app из роутеров + setup_react_routing_assets()
-│   ├── frontend_routing.py              # Подключение собранного React: mount /assets + SPA catch-all
+│   ├── main.py                      # Точка входа uvicorn; сборка main_app из роутеров + mount_vite_react_assets()
+│   ├── setup_frontend.py              # Подключение собранного React: mount /assets + SPA catch-all
 │   ├── main_gunicorn.py             # Точка входа gunicorn; переиспользует main_app
 │   ├── create_fastapi.py            # Фабрика приложения create_app() + lifespan (без блога — блог подключается в main.py)
 │   ├── base_dir_path.py             # DIR_CWD / BASE_DIR (Path)
@@ -99,7 +99,7 @@ my-fastapi-one/
 │   │   └── schema_order_product.py  # 20+ pydantic-схем, включая вложенные Resp
 │   │
 │   ├── md_articles/                 # Блог: JSON API /api/blog + реестр статей
-│   │   ├── __init__.py              # setup_auth_static_include(): вызывается из main.py, не из create_app() — middleware, mount /static, роутер
+│   │   ├── __init__.py              # include_router_api_frontend(): вызывается из main.py, не из create_app() — middleware, mount /static, роутер
 │   │   ├── api_blog.py              # 13 JSON-эндпоинтов /api/blog (включая /sections) + CSRF + 422-хендлер
 │   │   ├── schema_art.py            # ArticleLang (+section) + YAML-реестр (mtime-кэш, атомарная запись)
 │   │   ├── models.py                # BlogUser / BlogPost (SQLAlchemy 2.0)
@@ -141,8 +141,8 @@ my-fastapi-one/
 
 | Файл | Ответственность | Абстракции |
 |---|---|---|
-| `fastapi-application/main.py` | Собирает `main_app`: вызывает `create_app()` (каркас: FastAPI + lifespan + /docs), подключает три корневых роутера, вызывает `setup_auth_static_include(main_app)` (блог: middleware + mount /static + router_blog_api) и затем `setup_react_routing_assets(main_app)`. Функция `main()` запускает `uvicorn.run("main:main_app", reload=True)`. Вся SPA-обвязка вынесена в `frontend_routing.py`. | `main_app: FastAPI`, `main()` |
-| `../fastapi-application/md_articles/frontend_routing.py` | Единственная точка, где FastAPI узнаёт про фронтенд. `setup_react_routing_assets(app)` монтирует `/assets` (`StaticFiles` из `frontend/dist/assets`, `check_dir=False`), дописывает в конец `app.router.routes` GET-catch-all `/{full_path:path}` → `spa_fallback` (отдаёт `index.html`; для `/api*` и при отсутствии `index.html` — JSON 404). Подробно — в [`docs/13_frontend_spa_module.md`](13_frontend_spa_module.md). | `setup_react_routing_assets()`, `spa_fallback()`, `FRONTEND_DIST`, `ASSETS_DIR`, `INDEX_HTML` |
+| `fastapi-application/main.py` | Собирает `main_app`: вызывает `create_app()` (каркас: FastAPI + lifespan + /docs), подключает три корневых роутера, вызывает `include_router_api_frontend(main_app)` (блог: middleware + mount /static + router_blog_api) и затем `mount_vite_react_assets(main_app)`. Функция `main()` запускает `uvicorn.run("main:main_app", reload=True)`. Вся SPA-обвязка вынесена в `setup_frontend.py`. | `main_app: FastAPI`, `main()` |
+| `../fastapi-application/md_articles/setup_frontend.py` | Единственная точка, где FastAPI узнаёт про фронтенд. `mount_vite_react_assets(app)` монтирует `/assets` (`StaticFiles` из `frontend/dist/assets`, `check_dir=False`), дописывает в конец `app.router.routes` GET-catch-all `/{full_path:path}` → `spa_fallback` (отдаёт `index.html`; для `/api*` и при отсутствии `index.html` — JSON 404). Подробно — в [`docs/13_frontend_spa_module.md`](13_frontend_spa_module.md). | `mount_vite_react_assets()`, `spa_fallback()`, `FRONTEND_DIST`, `ASSETS_DIR`, `INDEX_HTML` |
 | `fastapi-application/create_fastapi.py` | Единственное место создания `FastAPI`. Настраивает `ORJSONResponse` по умолчанию, `lifespan`, переключает встроенные `/docs` на кастомные по флагу. Блог сюда не входит — он подключается из `main.py` через `include_router_api_frontend`. | `create_app()`, `lifespan()` |
 | `fastapi-application/base_dir_path.py` | Два `Path`-константы. `BASE_DIR` = каталог `fastapi-application/`, служит якорем для `.env`, папки логов, контента статей (`content_art/`) и аватаров. | `BASE_DIR` |
 
@@ -198,7 +198,7 @@ my-fastapi-one/
 
 | Файл | Ответственность | Абстракции |
 |---|---|---|
-| `md_articles/__init__.py` | `setup_auth_static_include(app)` — вызывается из `main.py`: middleware `inject_current_user_middleware`, `SessionMiddleware` (cookie 14 дней), mount `/static` (аватары), глобальный хендлер `RequestValidationError` (формат `{errors}` только для `/api/blog`), include `router_blog_api`. | `setup_auth_static_include()` |
+| `md_articles/__init__.py` | `include_router_api_frontend(app)` — вызывается из `main.py`: middleware `inject_current_user_middleware`, `SessionMiddleware` (cookie 14 дней), mount `/static` (аватары), глобальный хендлер `RequestValidationError` (формат `{errors}` только для `/api/blog`), include `router_blog_api`. | `include_router_api_frontend()` |
 | `md_articles/api_blog.py` | JSON API блога: 13 эндпоинтов под `/api/blog` (csrf, current_user, register/login/logout, account GET/POST, articles с фильтром `?section=`, articles/{id}, sections, art_manage + add_all + meta). CSRF: заголовок `X-CSRF-Token` для JSON, поле формы `csrf_token` для multipart. Авторизация — 403 JSON вместо редиректа. | `router_blog_api`, `validate_csrf_header/form`, `require_login_api` |
 | `md_articles/schema_art.py` | Реестр статей: pydantic-модель `ArticleLang`, чтение `articles.yaml` с mtime-кэшем и last-good-state при ошибке парсинга, атомарная запись (tempfile + `os.replace`), скан `content_art/`. Контент — `BASE_DIR / "content_art"`. | `ArticleLang`, `get_articles()`, `save_articles()`, `render_article()` |
 | `md_articles/models.py` | `BlogUser` / `BlogPost` (SQLAlchemy 2.0, реэкспортированы в `db_core/__init__.py` для Alembic). | `BlogUser`, `BlogPost` |

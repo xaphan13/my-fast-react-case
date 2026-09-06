@@ -16,7 +16,7 @@
 | 2. Клиентский (react-router) | то же, что (1) | React Router (history-mode) | `frontend/src/App.tsx` |
 | 3. Машинный (API) | `/api/blog/articles`, `/api/blog/articles/123`, `/api/blog/sections`, `/api/blog/login`, `/api/blog/account`, `/api/blog/csrf`, `/api/blog/current_user` | JavaScript-код (fetch) | `frontend/src/api/*.ts` |
 | 4. Серверный (FastAPI-роутер) | то же, что (3) | FastAPI-роутер | `fastapi-application/md_articles/api_blog.py` |
-| 5. Серверный (catch-all) | `/{full_path:path}` | любой GET, не начинающийся с `/api` | `../fastapi-application/md_articles/frontend_routing.py` |
+| 5. Серверный (catch-all) | `/{full_path:path}` | любой GET, не начинающийся с `/api` | `../fastapi-application/md_articles/setup_frontend.py` |
 
 **Связь между слоями:**
 
@@ -288,7 +288,7 @@ export default function App() {
 
 `<Route path="*" element={<Navigate to="/" replace />} />` — это **catch-all
 на клиенте**: любой URL, не совпавший ни с одним маршрутом, редиректит на
-`/`. Это не серверный catch-all (тот в `frontend_routing.py`), а
+`/`. Это не серверный catch-all (тот в `setup_frontend.py`), а
 клиентский. Они делают разное:
 - серверный (слой 5) отдаёт `index.html` для не-`/api` путей, чтобы React
   мог запуститься;
@@ -645,9 +645,9 @@ from md_articles.api_blog import router_blog_api
 from md_articles.auth_middleware_helpers import auth_add_middleware
 
 
-def setup_auth_static_include(app: FastAPI) -> None:
+def include_router_api_frontend(app: FastAPI) -> None:
     """Подключает блог к FastAPI: авторизация, статика, JSON-роутер."""
-    logF.info("setup_auth_static_include: подключение auth, /static, router_blog_api")
+    logF.info("include_router_api_frontend: подключение auth, /static, router_blog_api")
 
     auth_add_middleware(app)  # SessionMiddleware, current_user, exception handler
 
@@ -774,7 +774,7 @@ API и фронтенд живут на одном origin (`127.0.0.1:8000`). Б
 
 ## 5. Слой 5. Серверный catch-all — кто отдаёт index.html
 
-**`../fastapi-application/md_articles/frontend_routing.py`** — модуль, который
+**`../fastapi-application/md_articles/setup_frontend.py`** — модуль, который
 подключает собранный фронт:
 
 ```python
@@ -818,7 +818,7 @@ async def spa_fallback(request: Request) -> FileResponse | JSONResponse:
     return FileResponse(INDEX_HTML)
 
 
-def setup_react_routing_assets(app: FastAPI) -> None:
+def mount_vite_react_assets(app: FastAPI) -> None:
     """Подключает раздачу собранного React-приложения к FastAPI."""
     app.mount(
         "/assets",
@@ -856,8 +856,7 @@ def setup_react_routing_assets(app: FastAPI) -> None:
 **`fastapi-application/main.py`** — порядок подключения критичен:
 
 ```python
-from md_articles.setup_frontend import include_router_api_frontend
-from md_articles.frontend_routing import mount_vite_react_assets
+from md_articles.setup_frontend import include_router_api_frontend, mount_vite_react_assets
 
 # 1. Доменные роутеры (/api/v1, /users, /orders)
 app.include_router(router_api)
@@ -890,7 +889,7 @@ GET /art/Max/123 HTTP/1.1
 Host: 127.0.0.1:8000
 ```
 
-**Файл:** `fastapi-application/frontend_routing.py:35` (`spa_fallback`).
+**Файл:** `fastapi-application/setup_frontend.py:17` (`spa_fallback`).
 
 - Path не начинается с `/api` → идём к `FileResponse(INDEX_HTML)`.
 - Возвращается `frontend/dist/index.html` (~1 КБ).
@@ -901,7 +900,7 @@ Host: 127.0.0.1:8000
 GET /assets/index-AbCdEf12.js HTTP/1.1
 ```
 
-**Файл:** `fastapi-application/frontend_routing.py:80` (`StaticFiles` mount).
+**Файл:** `fastapi-application/setup_frontend.py:99` (`StaticFiles` mount).
 
 - Vite-хэшированный бандл, ~200 КБ.
 - `Cache-Control: public, max-age=31536000, immutable` — браузер не
@@ -1027,8 +1026,8 @@ state, React перерисовывает, `<MarkdownContent html={article.conte
 
 | Шаг | Слой | Файл | Что произошло |
 |---|---|---|---|
-| 1 | 1 → 5 | `frontend_routing.py:35` | GET /art/Max/123 → index.html |
-| 2 | 1 → 5 | `frontend_routing.py:80` | GET /assets/index-xxx.js → JS-бандл |
+| 1 | 1 → 5 | `setup_frontend.py:17` | GET /art/Max/123 → index.html |
+| 2 | 1 → 5 | `setup_frontend.py:99` | GET /assets/index-xxx.js → JS-бандл |
 | 3 | — | `main.tsx:7` | React стартует |
 | 4 | 2 | `App.tsx:33` | Routes матчит → ArticlePage |
 | 5 | 2 | `ArticlePage.tsx:8,11` | useParams + useEffect |
@@ -1049,13 +1048,13 @@ state, React перерисовывает, `<MarkdownContent html={article.conte
 
 | URL | HTTP-метод | Обработчик | Файл:строка | Что делает |
 |---|---|---|---|---|
-| `/` | GET | catch-all | `frontend_routing.py:35` | отдаёт `index.html` |
-| `/art/Max/123` | GET | catch-all | `frontend_routing.py:35` | отдаёт `index.html` |
-| `/section/Rust` | GET | catch-all | `frontend_routing.py:35` | отдаёт `index.html` |
-| `/login` | GET | catch-all | `frontend_routing.py:35` | отдаёт `index.html` |
-| `/account` | GET | catch-all | `frontend_routing.py:35` | отдаёт `index.html` |
-| `/art_manage` | GET | catch-all | `frontend_routing.py:35` | отдаёт `index.html` |
-| `/assets/*` | GET | StaticFiles | `frontend_routing.py:80` | отдаёт бандл |
+| `/` | GET | catch-all | `setup_frontend.py:17` | отдаёт `index.html` |
+| `/art/Max/123` | GET | catch-all | `setup_frontend.py:17` | отдаёт `index.html` |
+| `/section/Rust` | GET | catch-all | `setup_frontend.py:17` | отдаёт `index.html` |
+| `/login` | GET | catch-all | `setup_frontend.py:17` | отдаёт `index.html` |
+| `/account` | GET | catch-all | `setup_frontend.py:17` | отдаёт `index.html` |
+| `/art_manage` | GET | catch-all | `setup_frontend.py:17` | отдаёт `index.html` |
+| `/assets/*` | GET | StaticFiles | `setup_frontend.py:99` | отдаёт бандл |
 | `/static/*` | GET | StaticFiles | `frontend_auth_include.py:30` | отдаёт аватар |
 | `/api/blog/csrf` | GET | router_blog_api | `api_blog.py:167` | выдаёт CSRF-токен |
 | `/api/blog/current_user` | GET | router_blog_api | `api_blog.py:173` | текущий user |
@@ -1114,14 +1113,14 @@ const resp = await login({ email, password });  // → POST /api/blog/login
 `login` — это функция из `api/auth.ts`, которая через `postJson` делает
 правильный fetch с CSRF.
 
-### 8.3. `path: "*"` (App.tsx) vs `path: "{full_path:path}"` (frontend_routing.py)
+### 8.3. `path: "*"` (App.tsx) vs `path: "{full_path:path}"` (setup_frontend.py)
 
 Это **разные** catch-all:
 
 - `App.tsx:55` `<Route path="*" element={<Navigate to="/" replace />} />` —
   клиентский: работает в браузере, перехватывает URL после того, как
   React уже запустился.
-- `frontend_routing.py:88` `Route("/{full_path:path}", spa_fallback)` —
+- `setup_frontend.py:103` `Route("/{full_path:path}", spa_fallback)` —
   серверный: работает в FastAPI, перехватывает URL до запуска React
   (F5, прямой заход).
 
@@ -1192,7 +1191,7 @@ FastAPI сам сконвертирует в `int` (на бэкенде `art_id:
 - [ ] Понимаете, что `author` в URL — клиентская деталь (`useParams`), бэкенд про него не знает.
 - [ ] Можете объяснить, почему `encodeURIComponent` нужен для query, но не для path.
 - [ ] Знаете, что `useParams()` возвращает **строки**, и FastAPI сам парсит в `int`.
-- [ ] Понимаете разницу между серверным catch-all (`frontend_routing.py:88`) и клиентским (`App.tsx:55`).
+- [ ] Понимаете разницу между серверным catch-all (`setup_frontend.py:103`) и клиентским (`App.tsx:55`).
 - [ ] Можете проследить один сценарий (открытие статьи) от адресной строки до бэкенда и обратно.
 - [ ] Знаете, что `path: "*"` (App.tsx) — это **клиентский** catch-all, не серверный.
 - [ ] Умеете найти все 4 места, которые нужно менять при переименовании URL.

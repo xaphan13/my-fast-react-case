@@ -4,7 +4,11 @@ from pathlib import Path
 
 import bcrypt
 from PIL import Image
-from fastapi import HTTPException, Request, UploadFile
+from fastapi import (
+    HTTPException,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from pydantic import EmailStr
