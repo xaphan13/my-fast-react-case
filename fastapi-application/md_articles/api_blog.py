@@ -2,15 +2,12 @@
 # ++++++++++++++++++++++++++++++++ api_blog ++++++++++++++++++++++++++++++++++++
 # ------------- JSON API блога под React SPA (префикс /api/blog) ---------------
 # ------------------------------------------------------------------------------
-import io
 import os
-import time
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
-from PIL import Image
 from sqlalchemy import select
 
 from config_log import logF

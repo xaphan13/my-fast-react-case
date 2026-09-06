@@ -35,8 +35,3 @@ class SectionOut(BaseModel):
     name: str
     label: str
     count: int
-
-
-class MessageOut(BaseModel):
-    message: str
-    category: str
