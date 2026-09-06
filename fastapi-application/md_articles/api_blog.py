@@ -1,44 +1,16 @@
-# ==============================================================================
-# ++++++++++++++++++++++++++++++++ api_blog ++++++++++++++++++++++++++++++++++++
-# ------------- JSON API блога под React SPA (префикс /api/blog) ---------------
-# ------------------------------------------------------------------------------
 import os
 from pathlib import Path
+import time
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
 
-from config_log import logF
-from db_core.db_async import CurrentSession
-from md_articles.auth_middleware_helpers import (
-    _ERROR_EMAIL_TAKEN,
-    _ERROR_USERNAME_TAKEN,
-    _ensure_csrf_token,
-    _get_request_user,
-    _validation_response,
-    hash_password,
-    login_user,
-    logout_user,
+from md_articles.helpers_auth import (
     require_login_api,
-    validate_csrf_form,
     validate_csrf_header,
-    verify_password,
 )
-from md_articles.helpers_blog import (
-    _allocate_art_id,
-    _article_summary,
-    _email_exists,
-    _is_complete,
-    _is_valid_email,
-    _save_picture,
-    _user_out,
-    _username_exists,
-)
-from md_articles.models import BlogUser
 from md_articles.schema_art import (
-    ArticleLang,
     get_art,
     get_articles,
     get_registry_error,
@@ -48,7 +20,8 @@ from md_articles.schema_art import (
     scan_content_art,
     sync_registry_with_disk,
 )
-from md_articles.schema_blog import LoginIn, MetaIn, RegisterIn, SectionOut, UserOut
+from md_articles.schema_art import ArticleLang
+from md_articles.schema_blog import MetaIn, SectionOut
 
 
 router_blog_api = APIRouter(
@@ -58,186 +31,25 @@ router_blog_api = APIRouter(
 
 
 # ==============================================================================
-# ++++++++++++++++++++++++++++++++ auth API ++++++++++++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++ art helpers +++++++++++++++++++++++++++++++++++
 # ------------------------------------------------------------------------------
-@router_blog_api.get("/csrf", name="blog_api.csrf")
-async def csrf_token(request: Request):
-    token = _ensure_csrf_token(request)
-    return {"csrf_token": token}
+def _is_complete(art: ArticleLang) -> bool:
+    return bool(art.author.strip() and art.lang.strip() and art.title.strip())
 
 
-@router_blog_api.get("/current_user", name="blog_api.current_user")
-async def current_user(request: Request):
-    user = _get_request_user(request)
-    if user is None:
-        return {"user": None}
-    return {"user": _user_out(user).model_dump()}
+def _allocate_art_id(existing_ids: set[int]) -> int:
+    new_id = int(time.time())
+    while new_id in existing_ids:
+        new_id += 1
+    return new_id
 
 
-@router_blog_api.post("/register", name="blog_api.register")
-async def register_api(
-    request: Request,
-    session: CurrentSession,
-    payload: RegisterIn,
-):
-    await validate_csrf_header(request)
-
-    if _get_request_user(request) is not None:
-        raise HTTPException(status_code=400, detail="Already authenticated")
-
-    errors: dict[str, list[str]] = {}
-    username = payload.username.strip()
-    email = payload.email.strip()
-
-    if not username:
-        errors.setdefault("username", []).append("This field is required.")
-    elif len(username) < 2 or len(username) > 20:
-        errors.setdefault("username", []).append("Field must be between 2 and 20 characters long.")
-
-    if not email:
-        errors.setdefault("email", []).append("This field is required.")
-    elif not _is_valid_email(email):
-        errors.setdefault("email", []).append("Invalid email address.")
-
-    if not payload.password:
-        errors.setdefault("password", []).append("This field is required.")
-
-    if not payload.confirm_password:
-        errors.setdefault("confirm_password", []).append("This field is required.")
-    elif payload.confirm_password != payload.password:
-        errors.setdefault("confirm_password", []).append("Fields must match.")
-
-    if username and not errors.get("username") and await _username_exists(session, username):
-        errors.setdefault("username", []).append(_ERROR_USERNAME_TAKEN)
-
-    if email and not errors.get("email") and await _email_exists(session, email):
-        errors.setdefault("email", []).append(_ERROR_EMAIL_TAKEN)
-
-    if errors:
-        return _validation_response(errors)
-
-    hashed_password = hash_password(payload.password)
-    user = BlogUser(username=username, email=email, password=hashed_password)
-    logF.info(f"register_api = {user}")
-    session.add(user)
-    await session.commit()
-
-    return {
-        "message": "Your account has been created! You are now able to log in",
-        "category": "success",
-    }
-
-
-@router_blog_api.post("/login", name="blog_api.login")
-async def login_api(
-    request: Request,
-    session: CurrentSession,
-    payload: LoginIn,
-):
-    await validate_csrf_header(request)
-
-    if _get_request_user(request) is not None:
-        raise HTTPException(status_code=400, detail="Already authenticated")
-
-    errors: dict[str, list[str]] = {}
-    if not payload.email:
-        errors.setdefault("email", []).append("This field is required.")
-    if not payload.password:
-        errors.setdefault("password", []).append("This field is required.")
-    if errors:
-        return _validation_response(errors)
-
-    email = payload.email.strip()
-    result = await session.execute(select(BlogUser).where(BlogUser.email == email))
-    user = result.scalar_one_or_none()
-
-    if user and verify_password(payload.password, user.password):
-        login_user(request, user.id)
-        return {
-            "message": "You are now logged in",
-            "category": "success",
-            "user": _user_out(user).model_dump(),
-        }
-
-    return JSONResponse(
-        status_code=401,
-        content={
-            "message": "Login Unsuccessful. Please check email and password",
-            "category": "danger",
-        },
-    )
-
-
-@router_blog_api.post("/logout", name="blog_api.logout")
-async def logout_api(request: Request):
-    await validate_csrf_header(request)
-    logout_user(request)
-    return {"message": "You have been logged out", "category": "success"}
-
-
-# ==============================================================================
-# +++++++++++++++++++++++++++++ account API ++++++++++++++++++++++++++++++++++++
-# ------------------------------------------------------------------------------
-@router_blog_api.get("/account", name="blog_api.account_get")
-async def account_get_api(request: Request, _user=Depends(require_login_api)):
-    return {"user": _user_out(_get_request_user(request)).model_dump()}
-
-
-@router_blog_api.post("/account", name="blog_api.account_post")
-async def account_post_api(
-    request: Request,
-    session: CurrentSession,
-    _user=Depends(require_login_api),
-    username: str = Form(""),
-    email: str = Form(""),
-    picture: UploadFile | None = File(None),
-    csrf_token_field: str = Form("", alias="csrf_token"),
-):
-    await validate_csrf_form(request)
-    current_user_id = request.session.get("user_id")
-    current_user = (
-        await session.execute(select(BlogUser).where(BlogUser.id == current_user_id))
-    ).scalar_one()
-
-    errors: dict[str, list[str]] = {}
-    username = username.strip()
-    email = email.strip()
-
-    if not username:
-        errors.setdefault("username", []).append("This field is required.")
-    elif len(username) < 2 or len(username) > 20:
-        errors.setdefault("username", []).append("Field must be between 2 and 20 characters long.")
-
-    if not email:
-        errors.setdefault("email", []).append("This field is required.")
-    elif not _is_valid_email(email):
-        errors.setdefault("email", []).append("Invalid email address.")
-
-    if username != current_user.username and await _username_exists(session, username):
-        errors.setdefault("username", []).append(_ERROR_USERNAME_TAKEN)
-
-    if email != current_user.email and await _email_exists(session, email):
-        errors.setdefault("email", []).append(_ERROR_EMAIL_TAKEN)
-
-    if errors:
-        return _validation_response(errors)
-
-    if picture and picture.filename:
-        try:
-            picture_file = await _save_picture(picture)
-        except ValueError as exc:
-            return _validation_response({"picture": [str(exc)]})
-        current_user.image_file = picture_file
-
-    current_user.username = username
-    current_user.email = email
-    await session.commit()
-
-    return {
-        "message": "Your account has been updated!",
-        "category": "success",
-        "user": _user_out(current_user).model_dump(),
-    }
+def _article_summary(art: ArticleLang, disk_files: set[str] | None = None) -> dict:
+    data = art.model_dump(exclude={"content"})
+    data["complete"] = _is_complete(art)
+    if disk_files is not None:
+        data["file_exists"] = art.file_name in disk_files
+    return data
 
 
 # ==============================================================================

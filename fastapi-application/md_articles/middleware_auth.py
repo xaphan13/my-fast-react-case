@@ -1,22 +1,21 @@
 """
-Авторизация блога `md_articles` — единая точка входа `auth_add_middleware(app)`.
-Файл собирает всё, что относится к авторизации, в одном месте:
+Middleware-слой авторизации блога `md_articles` —
+точка входа `auth_add_middleware(app)` и его обвязка.
 
-  - `auth_add_middleware(app)` — подключает
-    `SessionMiddleware`, HTTP-middleware `inject_current_user_middleware`
-    и обработчик `RequestValidationError` для `{"errors": {...}}` под формы фронтенда.
+  - `auth_add_middleware(app)` — подключает `SessionMiddleware`,
+    HTTP-middleware `inject_current_user_middleware` и обработчик
+    `RequestValidationError` (`{"errors": ...}` под формы фронтенда).
   - `inject_current_user_middleware` — кладёт `request.state.current_user`
     на каждый запрос через короткую сессию БД.
-  - Хелперы сессии/паролей: `get_current_user`, `login_user`, `logout_user`,
-    `hash_password`, `verify_password`.
-  - CSRF и зависимости API: `validate_csrf_header`/`_form`, `require_login_api`,
-    `_ensure_csrf_token`, `_get_request_user`, `_validation_response`.
+  - `get_current_user` — достаёт `BlogUser` из сессии и пишет в `request.state`.
   - `custom_request_validation_exception_handler` — стандартный FastAPI
     422 для не-блоговых путей, формат `{"errors": ...}` для `/api/blog/*`.
+
+Хелперы сессии, паролей, CSRF, login-зависимости и validation handler
+живут в `md_articles.helpers_auth`.
 """
 
-import bcrypt
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
@@ -30,8 +29,23 @@ from md_articles.models import BlogUser
 
 
 # ==============================================================================
-# +++++++++++++++++++++++++++ current_user middleware +++++++++++++++++++++++++++
+# +++++++++++++++++++++++++++ current_user middleware ++++++++++++++++++++++++++
 # ------------------------------------------------------------------------------
+async def get_current_user(request: Request, session: CurrentSession) -> BlogUser | None:
+    """Получить пользователя из сессии и положить в request.state."""
+    user_id = request.session.get("user_id")
+
+    if user_id is None:
+        request.state.current_user = None
+        return None
+
+    result = await session.execute(select(BlogUser).where(BlogUser.id == user_id))
+    user = result.scalar_one_or_none()
+
+    request.state.current_user = user
+    return user
+
+
 async def inject_current_user_middleware(request: Request, call_next):
     """
     HTTP-middleware: подгружает current_user для каждого запроса.
@@ -53,21 +67,6 @@ async def inject_current_user_middleware(request: Request, call_next):
         await get_current_user(request, session)
         response = await call_next(request)
     return response
-
-
-async def get_current_user(request: Request, session: CurrentSession) -> BlogUser | None:
-    """Получить пользователя из сессии и положить в request.state."""
-    user_id = request.session.get("user_id")
-
-    if user_id is None:
-        request.state.current_user = None
-        return None
-
-    result = await session.execute(select(BlogUser).where(BlogUser.id == user_id))
-    user = result.scalar_one_or_none()
-
-    request.state.current_user = user
-    return user
 
 
 # ==============================================================================
@@ -111,6 +110,9 @@ def auth_add_middleware(app: FastAPI) -> None:
     )
 
 
+# ==============================================================================
+# +++++++++++++++++++++++++++ exception handler ++++++++++++++++++++++++++++++++
+# ------------------------------------------------------------------------------
 async def custom_request_validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
@@ -129,82 +131,4 @@ async def custom_request_validation_exception_handler(
             continue
         field = ".".join(str(loc) for loc in err.get("loc", []) if loc != "body")
         errors.setdefault(field or "body", []).append(err.get("msg", "Invalid value."))
-    return JSONResponse(status_code=422, content={"errors": errors})
-
-
-# ==============================================================================
-# +++++++++++++++++++++++++++++ auth helpers +++++++++++++++++++++++++++++++++++
-# ------------------------------------------------------------------------------
-def login_user(request: Request, user_id: int) -> None:
-    request.session["user_id"] = user_id
-
-
-def logout_user(request: Request) -> None:
-    request.session.pop("user_id", None)
-
-
-# ==============================================================================
-# +++++++++++++++++++++++++++++ password helpers +++++++++++++++++++++++++++++++
-# ------------------------------------------------------------------------------
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
-
-def verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
-
-
-# ==============================================================================
-# ++++++++++++++++++++++++++++++ CSRF helpers ++++++++++++++++++++++++++++++++++
-# ------------------------------------------------------------------------------
-def _ensure_csrf_token(request: Request) -> str:
-    """Вернуть существующий CSRF-токен или создать новый в сессии."""
-    token = request.session.get("csrf_token")
-    if not token:
-        import secrets
-
-        token = secrets.token_hex(32)
-        request.session["csrf_token"] = token
-    return token
-
-
-async def validate_csrf_form(request: Request) -> None:
-    """CSRF для multipart /api/blog/account: поле формы csrf_token."""
-    form = await request.form()
-    session_token = request.session.get("csrf_token")
-    form_token = form.get("csrf_token")
-    if not session_token or not form_token or form_token != session_token:
-        raise HTTPException(status_code=403, detail="CSRF token mismatch")
-
-
-async def validate_csrf_header(request: Request) -> None:
-    """CSRF для JSON POST-роутов: заголовок X-CSRF-Token против сессии."""
-    header_token = request.headers.get("X-CSRF-Token")
-    session_token = request.session.get("csrf_token")
-    if not session_token or not header_token or header_token != session_token:
-        raise HTTPException(status_code=403, detail="CSRF token mismatch")
-
-
-# ==============================================================================
-# +++++++++++++++++++++++++++++ login dependency +++++++++++++++++++++++++++++++
-# ------------------------------------------------------------------------------
-def _get_request_user(request: Request) -> BlogUser | None:
-    return getattr(request.state, "current_user", None)
-
-
-async def require_login_api(request: Request) -> None:
-    """Зависимость для API-роутов вместо редиректа — 403 JSON."""
-    if _get_request_user(request) is None:
-        raise HTTPException(status_code=403, detail="Authentication required")
-
-
-# ==============================================================================
-# ++++++++++++++++++++++++++++++ validation handler ++++++++++++++++++++++++++++
-# ------------------------------------------------------------------------------
-_ERROR_EMAIL_TAKEN = "That email is taken. Please choose a different one."
-_ERROR_USERNAME_TAKEN = "That username is taken. Please choose a different one."
-
-
-def _validation_response(errors: dict[str, list[str]]) -> JSONResponse:
-    """Стандартный ответ 422 с errors для форм фронтенда."""
     return JSONResponse(status_code=422, content={"errors": errors})

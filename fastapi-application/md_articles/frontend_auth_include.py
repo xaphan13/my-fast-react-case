@@ -4,7 +4,7 @@
 `setup_auth_static_include(app)` — единственная точка входа уровня пакета:
 
   1. `auth_add_middleware(app)` — middleware сессий, current_user, exception
-     handler 422 (вся авторизация собрана в `auth_middleware_helpers.py`).
+     handler 422 (вся авторизация собрана в `middleware_auth.py`).
   2. `app.mount("/static", StaticFiles(...))` — аватары из
      `BASE_DIR/static/profile_pics/`. `check_dir=False` — приложение
      стартует и без каталога (см. `frontend_routing.py`, аналогичный приём).
@@ -19,8 +19,9 @@ from fastapi.staticfiles import StaticFiles
 
 from base_dir_path import BASE_DIR
 from config_log import logF
+from md_articles.api_auth import router_auth
 from md_articles.api_blog import router_blog_api
-from md_articles.auth_middleware_helpers import auth_add_middleware
+from md_articles.middleware_auth import auth_add_middleware
 
 
 def setup_auth_static_include(app: FastAPI) -> None:
@@ -35,4 +36,5 @@ def setup_auth_static_include(app: FastAPI) -> None:
         name="static",
     )
 
+    app.include_router(router_auth)
     app.include_router(router_blog_api)
