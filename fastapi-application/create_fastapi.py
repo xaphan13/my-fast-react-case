@@ -14,8 +14,7 @@ async def lifespan(app: FastAPI):
     """
     Жизненный цикл приложения: startup → yield → shutdown.
 
-    Startup:
-      Логирует URL базы и заголовок приложения.
+    Startup: Логирует URL базы и заголовок приложения.
 
     Shutdown:
       `db_manager.engine_dispose()` асинхронно закрывает пул соединений engine SQLAlchemy.

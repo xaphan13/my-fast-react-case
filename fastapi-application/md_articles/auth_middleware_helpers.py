@@ -1,11 +1,10 @@
 """
 Авторизация блога `md_articles` — единая точка входа `auth_add_middleware(app)`.
-
 Файл собирает всё, что относится к авторизации, в одном месте:
 
-  - `auth_add_middleware(app)` — подключает `SessionMiddleware`, HTTP-middleware
-    `inject_current_user_middleware` и обработчик `RequestValidationError`
-    для формата `{"errors": {...}}` под формы фронтенда.
+  - `auth_add_middleware(app)` — подключает
+    `SessionMiddleware`, HTTP-middleware `inject_current_user_middleware`
+    и обработчик `RequestValidationError` для `{"errors": {...}}` под формы фронтенда.
   - `inject_current_user_middleware` — кладёт `request.state.current_user`
     на каждый запрос через короткую сессию БД.
   - Хелперы сессии/паролей: `get_current_user`, `login_user`, `logout_user`,
@@ -40,23 +39,15 @@ async def inject_current_user_middleware(request: Request, call_next):
     Что делает:
       Открывает короткую сессию БД через `db_manager.session_factory()`,
       вызывает `get_current_user(request, session)` — функция ниже,
-      которая по `request.session['user_id']` достаёт `BlogUser` из БД
-      и кладёт его в `request.state.current_user`. Затем передаёт
-      управление дальше по цепочке.
+      которая по `request.session['user_id']` достаёт `BlogUser` из БД,
+      кладёт его в `request.state.current_user`.
 
     Почему middleware, а не dependency:
-      `request.state.current_user` нужен **всем** обработчикам блога
-      (и `/api/blog/articles`, и `/api/blog/current_user`, и сам
-      exception-handler) и желательно без явной зависимости в каждом
-      `@router.get(...)`. Middleware гарантирует, что к моменту
-      вызова роута `request.state.current_user` либо `None`, либо
-      `BlogUser`. Это убирает повторяющийся `Depends(get_current_user)`
-      в каждом эндпоинте.
-
-    Регистрация: добавляется через `app.add_middleware(BaseHTTPMiddleware,
-    dispatch=...)` в `auth_add_middleware`. Это встраивает её в стек **рядом**
-    с `SessionMiddleware` (а не снаружи, как `app.middleware("http")(...)`),
-    иначе `request.session` ещё не инициализирован.
+      `request.state.current_user` нужен **всем** обработчикам блога и `/api/blog/articles`,
+      и `/api/blog/current_user` и желательно без явной зависимости в каждом `@router.get(...)`.
+      Middleware гарантирует, что к моменту вызова роута
+      `request.state.current_user` либо `None`, либо `BlogUser`.
+      Это убирает повторяющийся `Depends(get_current_user)`.
     """
     async with db_manager.session_factory() as session:
         await get_current_user(request, session)
@@ -64,17 +55,17 @@ async def inject_current_user_middleware(request: Request, call_next):
     return response
 
 
-async def get_current_user(
-    request: Request,
-    session: CurrentSession,
-) -> BlogUser | None:
+async def get_current_user(request: Request, session: CurrentSession) -> BlogUser | None:
     """Получить пользователя из сессии и положить в request.state."""
     user_id = request.session.get("user_id")
+
     if user_id is None:
         request.state.current_user = None
         return None
+
     result = await session.execute(select(BlogUser).where(BlogUser.id == user_id))
     user = result.scalar_one_or_none()
+
     request.state.current_user = user
     return user
 
@@ -88,24 +79,25 @@ def auth_add_middleware(app: FastAPI) -> None:
 
     Делает три вещи в строгом порядке:
       1. `app.add_middleware(BaseHTTPMiddleware, dispatch=inject_current_user_middleware)` —
-         гарантирует `request.state.current_user` к моменту вызова
-         любого обработчика блога. Должна быть добавлена **до**
-         `SessionMiddleware` — Starlette вставляет middleware через
-         `user_middleware.insert(0, ...)`, а в `build_middleware_stack`
-         стек оборачивается `reversed(...)`. Если добавить её после
-         SessionMiddleware, она окажется **снаружи** сессии, и
+         гарантирует `request.state.current_user` к моменту вызова любого обработчика блога.
+         Должна быть добавлена **до** `SessionMiddleware` — Starlette вставляет middleware через
+         `user_middleware.insert(0, ...)`, в `build_middleware_stack` стек оборачивается `reversed(...)`.
+         Если добавить её после SessionMiddleware, она окажется **снаружи** сессии, и
          `request.session` в `get_current_user` бросит `AssertionError`.
-      2. `app.add_middleware(SessionMiddleware, ...)` — cookie-сессии
-         (`itsdangerous`-подпись). Без неё `request.session` бросит
-         `AttributeError`. `secret_key` берётся из `settings.web`,
-         `max_age` = 14 дней.
-      3. `app.add_exception_handler(RequestValidationError, ...)` —
-         формат `{"errors": {...}}` для `/api/blog/*` (формы
-         фронтенда), стандартный FastAPI-ответ для всего остального.
+      2. `app.add_middleware(SessionMiddleware, ...)` — cookie-сессии (`itsdangerous`-подпись).
+         Без неё `request.session` бросит `AttributeError`.
+         `secret_key` берётся из `settings.web`, `max_age` = 14 дней.
+      3. `app.add_exception_handler(RequestValidationError, ...)` формат `{"errors": {...}}`
+          для `/api/blog/*` (формы фронтенда), стандартный FastAPI-ответ для всего остального.
     """
-    logF.info("auth_add_middleware: current_user middleware + SessionMiddleware + RequestValidationError handler")
+    logF.info(
+        "auth_add_middleware: inject_current_user_middleware + SessionMiddleware + RequestValidationError"
+    )
 
-    app.add_middleware(BaseHTTPMiddleware, dispatch=inject_current_user_middleware)
+    app.add_middleware(
+        BaseHTTPMiddleware,
+        dispatch=inject_current_user_middleware,
+    )
 
     app.add_middleware(
         SessionMiddleware,
@@ -176,20 +168,20 @@ def _ensure_csrf_token(request: Request) -> str:
     return token
 
 
-async def validate_csrf_header(request: Request) -> None:
-    """CSRF для JSON POST-роутов: заголовок X-CSRF-Token против сессии."""
-    header_token = request.headers.get("X-CSRF-Token")
-    session_token = request.session.get("csrf_token")
-    if not session_token or not header_token or header_token != session_token:
-        raise HTTPException(status_code=403, detail="CSRF token mismatch")
-
-
 async def validate_csrf_form(request: Request) -> None:
     """CSRF для multipart /api/blog/account: поле формы csrf_token."""
     form = await request.form()
     session_token = request.session.get("csrf_token")
     form_token = form.get("csrf_token")
     if not session_token or not form_token or form_token != session_token:
+        raise HTTPException(status_code=403, detail="CSRF token mismatch")
+
+
+async def validate_csrf_header(request: Request) -> None:
+    """CSRF для JSON POST-роутов: заголовок X-CSRF-Token против сессии."""
+    header_token = request.headers.get("X-CSRF-Token")
+    session_token = request.session.get("csrf_token")
+    if not session_token or not header_token or header_token != session_token:
         raise HTTPException(status_code=403, detail="CSRF token mismatch")
 
 

@@ -5,6 +5,7 @@
 Предметные хелперы блог-API: формирование user-DTO, валидация форм
 register/login/account, реестр статей, аватарки профиля.
 """
+
 import io
 import os
 import time
@@ -21,7 +22,7 @@ from md_articles.schema_blog import UserOut
 
 
 # ==============================================================================
-# ++++++++++++++++++++++++++++++++ helpers +++++++++++++++++++++++++++++++++++++
+# +++++++++++++++++++++++++++++ auth helpers +++++++++++++++++++++++++++++++++++
 # ------------------------------------------------------------------------------
 def _user_out(user: BlogUser) -> UserOut:
     """BlogUser -> JSON-представление для фронтенда."""
@@ -53,17 +54,6 @@ async def _email_exists(session: CurrentSession, email: str) -> bool:
     return result.scalar_one_or_none() is not None
 
 
-def _is_complete(art: ArticleLang) -> bool:
-    return bool(art.author.strip() and art.lang.strip() and art.title.strip())
-
-
-def _allocate_art_id(existing_ids: set[int]) -> int:
-    new_id = int(time.time())
-    while new_id in existing_ids:
-        new_id += 1
-    return new_id
-
-
 async def _save_picture(form_picture: UploadFile) -> str:
     """Ресайз до 125x125 и сохранение в static/profile_pics (логика 1:1)."""
     random_hex = os.urandom(8).hex()
@@ -90,8 +80,18 @@ async def _save_picture(form_picture: UploadFile) -> str:
 
 
 # ==============================================================================
-# +++++++++++++++++++++++++++++ articles API +++++++++++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++ art helpers +++++++++++++++++++++++++++++++++++
 # ------------------------------------------------------------------------------
+def _is_complete(art: ArticleLang) -> bool:
+    return bool(art.author.strip() and art.lang.strip() and art.title.strip())
+
+
+def _allocate_art_id(existing_ids: set[int]) -> int:
+    new_id = int(time.time())
+    while new_id in existing_ids:
+        new_id += 1
+    return new_id
+
 def _article_summary(art: ArticleLang, disk_files: set[str] | None = None) -> dict:
     data = art.model_dump(exclude={"content"})
     data["complete"] = _is_complete(art)
