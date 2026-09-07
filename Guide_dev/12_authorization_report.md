@@ -1,7 +1,7 @@
 # Отчёт: способ авторизации в проекте my-fastapi-one
 
 > Дата: 2026-09-03. Код по результатам анализа не менялся — только чтение и разбор.
-> Зона авторизации: блог `fastapi-application/md_articles/` + React SPA `frontend/`.
+> Зона авторизации: блог `../fastapi-application/md_articles` + React SPA `../frontend`.
 
 ---
 
@@ -54,7 +54,7 @@
 
 Это соответствует учебной цели проекта: демонстрационные роуты должны работать «из
 коробки» без логина, а блог — показывать полноценный цикл аутентификации как в реальном
-приложении. Подробности по архитектуре блога — в `docs/11_md_articles.md`.
+приложении. Подробности по архитектуре блога — в `../docs/11_md_articles.md`.
 
 ---
 
@@ -90,7 +90,7 @@ def include_router_api_frontend(app: FastAPI) -> None:
 `inject_current_user_middleware`.
 
 Секретный ключ подписи — из вложенной pydantic-модели конфигурации
-(`fastapi-application/core/config.py`):
+(`../fastapi-application/core/config.py`):
 
 ```python
 class WebConfig(BaseModel):
@@ -389,7 +389,7 @@ class LoginIn(BaseModel):
   (`max_age` в middleware). Поле в схеме оставлено для совместимости с фронтенд-формой,
   но сервер его игнорирует (см. `12` наблюдений ниже).
 
-### 5.6. Клиентская часть — `frontend/src/api/client.ts`
+### 5.6. Клиентская часть — `../frontend/src/api/client.ts`
 
 ```typescript
 // Все запросы идут с cookie-сессией (credentials: 'include').
@@ -575,7 +575,7 @@ Cookie-сессия на одном origin — это **нулевая инфр�
 ### 8.2. Вторая причина: SPA + same-origin
 
 Фронтенд собирается Vite и раздаётся самим FastAPI (`mount /assets` + SPA catch-all
-на `frontend/dist/index.html`). API и SPA — **один origin**, поэтому:
+на `../frontend/dist/index.html`). API и SPA — **один origin**, поэтому:
 
 - cookie-сессия работает без CORS-танцев (`credentials: 'include'` достаточно);
 - нет необходимости в JWT «чтобы не хранить состояние» — состояние и так одно
@@ -750,4 +750,4 @@ frontend/src/api/
 | CSRF: генерация + 2 валидатора | `md_articles/auth_middleware_helpers.py::_ensure_csrf_token`, `validate_csrf_header`, `validate_csrf_form` |
 | `require_login_api` (403) | `md_articles/auth_middleware_helpers.py::require_login_api` |
 | Логин/регистрация/логаут | `md_articles/api_blog.py` |
-| Клиент: cookie + CSRF | `frontend/src/api/client.ts` |
+| Клиент: cookie + CSRF | `../frontend/src/api/client.ts` |

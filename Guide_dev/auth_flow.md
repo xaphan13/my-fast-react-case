@@ -8,7 +8,7 @@
 
 ## Какие файлы участвуют
 
-**Сервер** (`fastapi-application/`):
+**Сервер** (`../fastapi-application`):
 
 ```
 md_articles/frontend_auth_include.py      # подключение SessionMiddleware + middleware current_user
@@ -17,7 +17,7 @@ md_articles/models.py        # BlogUser — таблица blog_user
 md_articles/api_blog.py      # роуты /api/blog/*, csrf, require_login_api
 ```
 
-**Клиент** (`frontend/src/api/`):
+**Клиент** (`../frontend/src/api`):
 
 ```
 client.ts                    # fetch + credentials:'include' + CSRF в заголовок/форму
@@ -60,7 +60,7 @@ def include_router_api_frontend(app: FastAPI) -> None:
 
 ## 2. Клиент шлёт запросы с cookie
 
-`frontend/src/api/client.ts` — единственная точка, где делаются `fetch` к API:
+`../frontend/src/api/client.ts` — единственная точка, где делаются `fetch` к API:
 
 ```typescript
 // frontend/src/api/client.ts:30
@@ -387,7 +387,7 @@ def _get_request_user(request: Request) -> BlogUser | None:
 
 ## 10. Фронт реагирует на 403
 
-`frontend/src/api/auth.ts` — поверх `client.ts`:
+`../frontend/src/api/auth.ts` — поверх `client.ts`:
 
 ```typescript
 // frontend/src/api/auth.ts
