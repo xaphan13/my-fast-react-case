@@ -2,6 +2,11 @@
 
 > Дата: 2026-09-03. Код по результатам анализа не менялся — только чтение и разбор.
 > Зона авторизации: блог `../fastapi-application/md_articles` + React SPA `../frontend`.
+>
+> Примечание (2026-09-07): имена файлов и функций обновлены после разделения auth-слоя
+> (`middleware_auth.py` / `helpers_auth.py` / `api_auth.py`). Канонический разбор
+> авторизации — `../docs/04_authorization.md`; улучшение и замена библиотекой —
+> `../docs/05_authorization_upgrade.md`.
 
 ---
 
@@ -54,7 +59,8 @@
 
 Это соответствует учебной цели проекта: демонстрационные роуты должны работать «из
 коробки» без логина, а блог — показывать полноценный цикл аутентификации как в реальном
-приложении. Подробности по архитектуре блога — в `../docs/11_md_articles.md`.
+приложении. Подробности по архитектуре блога — в `../docs/02_architecture.md`,
+полный разбор авторизации — в `../docs/04_authorization.md`.
 
 ---
 
@@ -71,10 +77,10 @@ Starlette `SessionMiddleware` реализует паттерн **client-side se
 
 ```python
 def include_router_api_frontend(app: FastAPI) -> None:
-    """Подключает блог к FastAPI: авторизация, статика, JSON-роутер."""
-    logF.info("include_router_api_frontend: подключение auth, /static, router_blog_api")
+    """Подключает блог к FastAPI: авторизация, статика, JSON-роутеры."""
+    logF.info("include_router_api_frontend: подключение auth, /static, router_*")
 
-    auth_add_middleware(app)
+    add_middleware_auth(app)
 
     app.mount(
         "/static",
@@ -82,12 +88,13 @@ def include_router_api_frontend(app: FastAPI) -> None:
         name="static",
     )
 
+    app.include_router(router_auth_api)
     app.include_router(router_blog_api)
 ```
 
-Точка входа авторизации — `auth_add_middleware(app)` в `auth_middleware_helpers.py`:
-добавляет `SessionMiddleware` (14 дней, подпись HMAC `secret_key`) и HTTP-middleware
-`inject_current_user_middleware`.
+Точка входа авторизации — `add_middleware_auth(app)` в `middleware_auth.py`:
+добавляет `SessionMiddleware` (14 дней, подпись HMAC `secret_key`),
+HTTP-middleware `inject_current_user_middleware` и кастомный 422-handler.
 
 Секретный ключ подписи — из вложенной pydantic-модели конфигурации
 (`../fastapi-application/core/config.py`):
@@ -160,7 +167,7 @@ request.session["csrf_token"] = token       # secrets.token_hex(32), стави�
 CSRF-проверка + удаление ключа из сессии — cookie перезаписывается уже без `user_id`:
 
 ```python
-@router_blog_api.post("/logout", name="blog_api.logout")
+@router_auth_api.post("/logout", name="auth.logout")
 async def logout_api(request: Request):
     await validate_csrf_header(request)
     logout_user(request)
@@ -171,9 +178,10 @@ async def logout_api(request: Request):
 
 ## 5. Разбор кода по слоям
 
-### 5.1. Слой утилит сессии — `md_articles/auth_middleware_helpers.py`
+### 5.1. Слой утилит сессии — `md_articles/middleware_auth.py` + `md_articles/helpers_auth.py`
 
-Ядро аутентификации — четыре функции + зависимость, в одном файле:
+Ядро аутентификации: `get_current_user` (middleware_auth.py) и
+сессионные/bcrypt-хелперы (helpers_auth.py):
 
 ```python
 async def get_current_user(
@@ -215,10 +223,10 @@ def verify_password(password: str, hashed: str) -> bool:
    (для учебного проекта несущественно).
 2. **`request.state.current_user` как канал передачи.** Middleware вычисляет
    пользователя один раз, а роуты и зависимости читают его через
-   `_get_request_user(request)` — нет повторных запросов к БД и нет дублирования
+   `get_request_user(request)` — нет повторных запросов к БД и нет дублирования
    логики загрузки.
 
-### 5.2. Middleware — `md_articles/auth_middleware_helpers.py`
+### 5.2. Middleware — `md_articles/middleware_auth.py`
 
 ```python
 async def inject_current_user_middleware(request: Request, call_next):
@@ -265,12 +273,12 @@ class BlogUser(Base):
   реального объекта. Свойство не используется JSON API, но оставлено как часть
   контракта объекта пользователя для совместимости с фронтенд-формами.
 - Уникальность `username` и `email` обеспечивается и на уровне БД (`unique=True`),
-  и предварительной проверкой в API (`_username_exists` / `_email_exists`).
+  и предварительной проверкой в API (`username_exists` / `email_exists`).
 
-### 5.4. Регистрация — `api_blog.py::register_api`
+### 5.4. Регистрация — `api_auth.py::register_api`
 
 ```python
-@router_blog_api.post("/register", name="blog_api.register")
+@router_auth_api.post("/register", name="auth.register")
 async def register_api(
     request: Request,
     session: CurrentSession,
@@ -278,7 +286,7 @@ async def register_api(
 ):
     await validate_csrf_header(request)
 
-    if _get_request_user(request) is not None:
+    if get_request_user(request) is not None:
         raise HTTPException(status_code=400, detail="Already authenticated")
 
     errors: dict[str, list[str]] = {}
@@ -294,13 +302,13 @@ async def register_api(
 
     if not email:
         errors.setdefault("email", []).append("This field is required.")
-    elif not _is_valid_email(email):
+    elif not is_valid_email(email):
         errors.setdefault("email", []).append("Invalid email address.")
 
     # ... password / confirm_password / уникальность username и email ...
 
     if errors:
-        return _validation_response(errors)
+        return validation_response(errors)
 
     hashed_password = hash_password(payload.password)
     user = BlogUser(username=username, email=email, password=hashed_password)
@@ -326,10 +334,10 @@ async def register_api(
   (явное требование дизайна: разделить «создание аккаунта» и «вход»).
 - **Защита от повторной регистрации под своей сессией**: `Already authenticated` → 400.
 
-### 5.5. Вход — `api_blog.py::login_api`
+### 5.5. Вход — `api_auth.py::login_api`
 
 ```python
-@router_blog_api.post("/login", name="blog_api.login")
+@router_auth_api.post("/login", name="auth.login")
 async def login_api(
     request: Request,
     session: CurrentSession,
@@ -337,7 +345,7 @@ async def login_api(
 ):
     await validate_csrf_header(request)
 
-    if _get_request_user(request) is not None:
+    if get_request_user(request) is not None:
         raise HTTPException(status_code=400, detail="Already authenticated")
 
     errors: dict[str, list[str]] = {}
@@ -346,7 +354,7 @@ async def login_api(
     if not payload.password:
         errors.setdefault("password", []).append("This field is required.")
     if errors:
-        return _validation_response(errors)
+        return validation_response(errors)
 
     email = payload.email.strip()
     result = await session.execute(select(BlogUser).where(BlogUser.email == email))
@@ -357,7 +365,7 @@ async def login_api(
         return {
             "message": "You are now logged in",
             "category": "success",
-            "user": _user_out(user).model_dump(),
+            "user": user_out(user).model_dump(),
         }
 
     return JSONResponse(
@@ -445,12 +453,12 @@ cookie к каждому запросу на этот домен автомат�
 обязателен; для JWT в заголовке `Authorization` он не нужен (токен браузер сам не
 подставит).
 
-### 6.2. Реализация — `api_blog.py`
+### 6.2. Реализация — `helpers_auth.py` (токены и валидаторы) + `api_auth.py` (роут выдачи)
 
 Генерация (один токен на всю сессию):
 
 ```python
-def _ensure_csrf_token(request: Request) -> str:
+def ensure_csrf_token(request: Request) -> str:
     """Вернуть существующий CSRF-токен или создать новый в сессии."""
     token = request.session.get("csrf_token")
     if not token:
@@ -483,9 +491,9 @@ async def validate_csrf_form(request: Request) -> None:
 Выдача токена клиенту:
 
 ```python
-@router_blog_api.get("/csrf", name="blog_api.csrf")
+@router_auth_api.get("/csrf", name="auth.csrf")
 async def csrf_token(request: Request):
-    token = _ensure_csrf_token(request)
+    token = ensure_csrf_token(request)
     return {"csrf_token": token}
 ```
 
@@ -526,24 +534,24 @@ async def csrf_token(request: Request):
 ### 7.1. Зависимость `require_login_api`
 
 ```python
-def _get_request_user(request: Request) -> BlogUser | None:
+def get_request_user(request: Request) -> BlogUser | None:
     return getattr(request.state, "current_user", None)
 
 
 async def require_login_api(request: Request) -> None:
     """Зависимость для API-роутов вместо редиректа — 403 JSON."""
-    if _get_request_user(request) is None:
+    if get_request_user(request) is None:
         raise HTTPException(status_code=403, detail="Authentication required")
 ```
 
 Применение — одна строка в сигнатуре роута:
 
 ```python
-@router_blog_api.get("/account", name="blog_api.account_get")
+@router_auth_api.get("/account", name="auth.account_get")
 async def account_get_api(
     request: Request, _user=Depends(require_login_api)
 ):
-    return {"user": _user_out(_get_request_user(request)).model_dump()}
+    return {"user": user_out(get_request_user(request)).model_dump()}
 ```
 
 Почему 403, а не редирект 302 на `/login`: это **JSON API для SPA**. Редирект из
@@ -585,7 +593,7 @@ Cookie-сессия на одном origin — это **нулевая инфр�
 ### 8.3. Третья причина: учебная наглядность
 
 Проект — «исполняемый каталог приёмов». Свой маленький, читаемый за 50 строк слой
-авторизации (`auth_middleware_helpers.py`) показывает механику лучше, чем готовая библиотека
+авторизации (`helpers_auth.py` + `middleware_auth.py`) показывает механику лучше, чем готовая библиотека
 (fastapi-users и т.п.): видно, где ставится `user_id`, где проверяется пароль,
 где валидируется CSRF. Никакой магии.
 
@@ -644,8 +652,8 @@ origin один, микросервисов нет.
 
 ### 10.1. Преимущества (что так даёт именно cookie-сессия + bcrypt + CSRF)
 
-1. **Минимальный объём кода и зависимостей.** Весь слой — `auth_middleware_helpers.py` (~140 строк)
-   + функции-валидаторы в `api_blog.py`. Ни fastapi-users, ни itsdangerous-обвязки,
+1. **Минимальный объём кода и зависимостей.** Весь слой — `helpers_auth.py` +
+   `middleware_auth.py` (~200 строк) + роуты `api_auth.py`. Ни fastapi-users, ни itsdangerous-обвязки,
    ни хранилища сессий: `SessionMiddleware` и `bcrypt` уже в зависимостях.
 2. **Мгновенный отзыв и консистентность.** `get_current_user` перечитывает
    пользователя из БД на каждый запрос: удаление аккаунта или смена email
@@ -728,12 +736,15 @@ origin один, микросервисов нет.
 fastapi-application/
 ├── core/config.py                       # WebConfig.secret_key (подпись cookie)
 ├── md_articles/
-│   ├── frontend_auth_include.py         # include_router_api_frontend(): middleware + static + router
-│   ├── auth_middleware_helpers.py       # auth_add_middleware, current_user-middleware,
-│   │                                    #   CSRF-хелперы, hash_password/verify_password (bcrypt)
+│   ├── setup_frontend.py                # include_router_api_frontend(): middleware + static + роутеры
+│   ├── middleware_auth.py               # add_middleware_auth (стек), get_current_user,
+│   │                                    #   inject_current_user_middleware, 422-handler
+│   ├── helpers_auth.py                  # login/logout_user, bcrypt, CSRF-хелперы,
+│   │                                    #   require_login_api, user_out, save_picture
 │   ├── models.py                        # BlogUser (blog_user): password = bcrypt-хеш
-│   └── api_blog.py                      # JSON API: /csrf /register /login /logout
-│                                        #   /account; require_login_api; validate_csrf_*
+│   ├── api_auth.py                      # auth-роуты /api/blog: /csrf /current_user /register
+│   │                                    #   /login /logout /account (GET+POST)
+│   └── api_blog.py                      # статьи: /sections /articles /art_manage/*
 frontend/src/api/
 ├── client.ts                            # credentials: 'include', getCsrfToken,
 │                                        #   postJson (X-CSRF-Token), postMultipart (поле)
@@ -744,10 +755,11 @@ frontend/src/api/
 
 | Что | Файл |
 |---|---|
-| Подключение блога (middleware + static + JSON API) | `md_articles/frontend_auth_include.py::include_router_api_frontend` |
-| `add_middleware_auth`: `SessionMiddleware` + current_user-middleware + exception handler | `md_articles/auth_middleware_helpers.py::auth_add_middleware` |
-| Сессия: login/logout/get_current_user + bcrypt | `md_articles/auth_middleware_helpers.py` (login_user/logout_user/get_current_user, hash_password/verify_password) |
-| CSRF: генерация + 2 валидатора | `md_articles/auth_middleware_helpers.py::_ensure_csrf_token`, `validate_csrf_header`, `validate_csrf_form` |
-| `require_login_api` (403) | `md_articles/auth_middleware_helpers.py::require_login_api` |
-| Логин/регистрация/логаут | `md_articles/api_blog.py` |
+| Подключение блога (middleware + static + JSON API) | `md_articles/setup_frontend.py::include_router_api_frontend` |
+| `add_middleware_auth`: `SessionMiddleware` + current_user-middleware + exception handler | `md_articles/middleware_auth.py::add_middleware_auth` |
+| Сессия: login/logout + bcrypt | `md_articles/helpers_auth.py` (login_user/logout_user, hash_password/verify_password) |
+| Загрузка current_user на каждый запрос | `md_articles/middleware_auth.py` (get_current_user, inject_current_user_middleware) |
+| CSRF: генерация + 2 валидатора | `md_articles/helpers_auth.py::ensure_csrf_token`, `validate_csrf_header`, `validate_csrf_form` |
+| `require_login_api` (403) | `md_articles/helpers_auth.py::require_login_api` |
+| Логин/регистрация/логаут/аккаунт | `md_articles/api_auth.py` |
 | Клиент: cookie + CSRF | `../frontend/src/api/client.ts` |
