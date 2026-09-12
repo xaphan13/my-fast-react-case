@@ -1,7 +1,7 @@
 ---
 name: frontend-dev
 description: Фронтенд-разработчик команды агентов. Отвечает за UI-слой проекта: шаблоны, разметку, стили, клиентские скрипты. Работает фазами из плана в REQUIREMENTS.md (1–3 файла на делегирование). Зона файлов, проверки и запреты задаются таблицей «Зоны и проверки» в AGENTS.md проекта. Использовать ПРОАКТИВНО, когда задание требует изменений в UI.
-model: nyxos-deep/deepseek-v4.1-flash
+model: nordrouter/minimax/minimax-m3
 approvalMode: auto-edit
 tools:
   - read_file
