@@ -1,82 +1,65 @@
-// Базовый API-клиент для /api/blog.
+// Базовый API-клиент для fastapi-users (/auth/*, /users/*).
 // Все запросы идут с cookie-сессией (credentials: 'include').
-// State-changing запросы требуют CSRF-токена:
-//   - JSON (postJson) -> заголовок X-CSRF-Token;
-//   - multipart (postMultipart) -> поле формы csrf_token
-//     (как требует backend для POST /api/blog/account).
+// fastapi-users ставит cookie через Set-Cookie — fetch должен её принять.
+// CSRF больше нет: backend использует cookie-strategy авторизацию.
 
 export class ApiError extends Error {
   status: number;
   data: unknown;
-
-  constructor(status: number, data: unknown) {
-    super(`API error ${status}`);
+  constructor(status: number, message: string, data: unknown = null) {
+    super(message);
     this.status = status;
     this.data = data;
+    this.name = 'ApiError';
   }
 }
 
-async function parseResponse(res: Response): Promise<unknown> {
-  const text = await res.text();
-  if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
-}
-
-async function request(path: string, init?: RequestInit): Promise<Response> {
+async function request(path: string, init: RequestInit = {}): Promise<Response> {
   const res = await fetch(path, { credentials: 'include', ...init });
   return res;
 }
 
 async function ensureOk(res: Response): Promise<unknown> {
-  const data = await parseResponse(res);
-  if (!res.ok) throw new ApiError(res.status, data);
-  return data;
+  if (res.ok) {
+    if (res.status === 204) return null;
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('application/json')) return res.json();
+    return res.text();
+  }
+  let data: unknown = null;
+  try {
+    data = await res.json();
+  } catch {
+    data = await res.text().catch(() => null);
+  }
+  throw new ApiError(res.status, `HTTP ${res.status}`, data);
 }
 
 export async function getJson<T = unknown>(path: string): Promise<T> {
-  const res = await request(path);
+  const res = await request(path, { method: 'GET' });
   return (await ensureOk(res)) as T;
 }
 
-// GET /api/blog/csrf — создаёт/возвращает csrf_token из сессии.
-export async function getCsrfToken(): Promise<string> {
-  const data = await getJson<{ csrf_token: string }>('/api/blog/csrf');
-  return data.csrf_token;
-}
-
-// POST с JSON-телом; CSRF-токен кладём в заголовок X-CSRF-Token.
-export async function postJson<T = unknown>(
-  path: string,
-  body: unknown,
-): Promise<T> {
-  const token = await getCsrfToken();
+export async function postJson<T = unknown>(path: string, body: unknown): Promise<T> {
   const res = await request(path, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRF-Token': token,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   return (await ensureOk(res)) as T;
 }
 
-// POST с multipart-формой; CSRF-токен передаётся полем csrf_token.
-export async function postMultipart<T = unknown>(
-  path: string,
-  formData: FormData,
-): Promise<T> {
-  if (!formData.has('csrf_token')) {
-    formData.set('csrf_token', await getCsrfToken());
-  }
+export async function postForm<T = unknown>(path: string, form: URLSearchParams): Promise<T> {
   const res = await request(path, {
     method: 'POST',
-    // Content-Type не ставим руками: браузер сам подставит boundary.
-    body: formData,
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: form.toString(),
   });
+  return (await ensureOk(res)) as T;
+}
+
+export async function postMultipart<T = unknown>(path: string, formData: FormData): Promise<T> {
+  // Content-Type не выставляем — браузер сам с boundary.
+  const res = await request(path, { method: 'POST', body: formData });
   return (await ensureOk(res)) as T;
 }

@@ -1,0 +1,3 @@
+удалён 'fastapi-application/md_articles/api_auth.py'
+удалён 'fastapi-application/md_articles/middleware_auth.py'
+удалён 'fastapi-application/md_articles/helpers_auth.py'

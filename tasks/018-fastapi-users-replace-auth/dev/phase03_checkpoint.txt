@@ -1,0 +1,31 @@
+Phase 03 checkpoint
+===================
+
+[OK] len(main_app.routes) == 44
+    (baseline 42 + 9 auth routes - 7 deleted = 44)
+
+[OK] Deleted paths absent:
+    - /api/blog/csrf         NOT FOUND ✓
+    - /api/blog/login        NOT FOUND ✓
+    - /api/blog/logout       NOT FOUND ✓
+    - /api/blog/register     NOT FOUND ✓
+    - /api/blog/current_user NOT FOUND ✓
+    - /api/blog/account      NOT FOUND ✓
+
+[OK] New paths present:
+    - /auth/jwt/login        ✓
+    - /auth/jwt/logout       ✓
+    - /auth/register         ✓
+    - /users/me              ✓ (GET)
+    - /users/me              ✓ (PATCH)
+    - /users/{id}            ✓ (GET)
+    - /users/{id}            ✓ (PATCH)
+    - /users/{id}            ✓ (DELETE)
+    - /auth/account          ✓ (POST)
+
+[OK] grep -rE "validate_csrf|ensure_csrf_token|require_login_api|SessionMiddleware|hash_password|verify_password" \
+        fastapi-application/md_articles/ --include='*.py' \
+    → 1 match (intentional, docstring of md_articles/__init__.py:
+      "SessionMiddleware, самописный CSRF и helpers удалены"). Source code is clean.
+
+[OK] uv run ruff check . → All checks passed! exit 0

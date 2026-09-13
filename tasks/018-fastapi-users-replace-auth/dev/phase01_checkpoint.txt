@@ -1,0 +1,11 @@
+=== checkpoint 1: fastapi-users in uv.lock ===
+name = "fastapi-users"
+=== checkpoint 2: import all auth_users symbols (db_core preloaded) ===
+OK
+=== checkpoint 3: db_core.User tablenames ===
+user
+=== checkpoint 3b: 'user' table in Base.metadata ===
+True ['blog_post', 'blog_user', 'order_product_association', 'orders', 'posts', 'products', 'user', 'users']
+routes: 42
+db_core.User tab: user
+tables: ['blog_post', 'blog_user', 'order_product_association', 'orders', 'posts', 'products', 'user', 'users']

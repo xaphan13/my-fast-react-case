@@ -1,0 +1,17 @@
+=== Phase 03 regression curl ===
+
+GET /docs                                           -> 200
+GET /api/blog/articles                             -> 200
+GET /api/blog/sections                             -> 200
+GET /users/get_all_users                           -> 500
+GET /orders/get_all_orders                         -> 422
+GET /users/me (no cookie)                          -> 401  (expected 401)
+GET /api/blog/art_manage (no cookie)               -> 401  (expected 401 or 403)
+POST /api/blog/art_manage/add_all (no cookie)      -> 401  (expected 401)
+POST /auth/jwt/login (no body)                     -> 422  (expected 422)
+POST /auth/register (no body)                      -> 422  (expected 422)
+
+=== Headers sample ===
+HTTP/1.1 200 OK
+date: Sat, 12 Sep 2026 19:26:52 GMT
+server: uvicorn

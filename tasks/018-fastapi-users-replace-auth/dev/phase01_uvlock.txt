@@ -1,0 +1,12 @@
+Resolved 54 packages in 4.42s
+Added argon2-cffi v25.1.0
+Added argon2-cffi-bindings v26.1.0
+Added cffi v2.1.1
+Added cryptography v50.0.1
+Added fastapi-users v15.0.5
+Added fastapi-users-db-sqlalchemy v7.0.0
+Removed itsdangerous v2.2.0
+Added makefun v1.16.0
+Added pwdlib v0.3.0
+Added pycparser v3.0
+Added pyjwt v2.14.0

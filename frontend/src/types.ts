@@ -3,7 +3,7 @@
 // с credentials: 'include' (см. api/client.ts).
 
 export interface User {
-  id: number;
+  id: string;
   username: string;
   email: string;
   image_file: string;

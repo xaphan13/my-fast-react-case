@@ -22,6 +22,24 @@ class WebConfig(BaseModel):
     secret_key: str = "dev-insecure-secret-key-change-me"
 
 
+class AuthUsersConfig(BaseModel):
+    """Настройки пакета auth_users (fastapi-users).
+
+    Параметры cookie-transport и JWT-стратегии: имя/max-age/secure/httponly/samesite
+    для cookie и алгоритм/lifetime для JWT. password_min_length используется
+    в UserManager.validate_password (см. auth_users/user_manager.py).
+    """
+
+    cookie_name: str = "auth"
+    cookie_max_age: int = 86400
+    cookie_secure: bool = False
+    cookie_httponly: bool = True
+    cookie_samesite: str = "lax"
+    jwt_lifetime_seconds: int = 86400
+    jwt_algorithm: str = "HS256"
+    password_min_length: int = 8
+
+
 class ApiV1Prefix(BaseModel):
     prefix: str = "/v1"
     dep_examples: str = "/dep_examples"
@@ -79,6 +97,7 @@ class Settings(BaseSettings):
     run: RunConfig = RunConfig()
     api: ApiPrefix = ApiPrefix()
     web: WebConfig = WebConfig()
+    auth_users: AuthUsersConfig = AuthUsersConfig()
 
     db: DatabaseConfig
 

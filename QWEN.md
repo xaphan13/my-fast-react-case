@@ -56,17 +56,23 @@
 | `router_api` | `api/__init__.py` | `/api/v1` | `dep_examples/` (9 роутов Depends) + 4 стиля `/my_items/{item_id}` |
 | `r_users_sql` | `ex_user_post/router_users.py` | `/users` | CRUD-слой домена User/Post (2 роута) |
 | `r_order_one` | `ex_order_product/router_order_one.py` | `/orders` | 6 роутов Order: ORM/Core запись, фильтры, сортировка, joinedload |
-| `router_blog_api` | `md_articles/api_blog.py` | `/api/blog` | JSON API блога для React SPA: csrf, current_user, register/login/logout, account (GET/POST), articles, articles/{id}, art_manage + add_all + meta |
+| `router_blog_api` | `md_articles/api_blog.py` | `/api/blog` | JSON API блога для React SPA: articles, sections, articles/{id}, art_manage + add_all + meta + sync. Авторизация (login/logout/register/users/me/account) вынесена в пакет `auth_users` (см. `docs/04_authorization.md`). |
 
-Итого 41 route-объект: 21 API + служебные `/docs`, `/redoc`, `/openapi.json`,
-`/docs/oauth2-redirect` (кастомные Swagger/ReDoc регистрирует `utils/docs.py`)
-+ 13 JSON-роутов блога + mount `/static` (аватары) + mount `/assets`
-(сборка фронтенда) + SPA catch-all `/{full_path:path}` (отдаёт
-`frontend/dist/index.html`, для `/api*` — 404 JSON). Клиентская часть блога —
-React SPA в `frontend/` (Vite + TypeScript + Tailwind v4, сборка не коммитится).
+Итого 44 route-объекта: 21 API демо-доменов (`api/`, `ex_user_post/`, `ex_order_product/`)
++ 7 JSON-роутов блога (`/api/blog/*`) + 9 auth-роутов из пакета `auth_users/`
+(`/auth/jwt/{login,logout}`, `/auth/register`, `/auth/account`,
+`/users/me` (GET/PATCH), `/users/{id}` (GET/PATCH/DELETE))
++ 4 служебных `/docs`, `/redoc`, `/openapi.json`, `/docs/oauth2-redirect`
+(кастомные Swagger/ReDoc регистрирует `utils/docs.py`) + mount `/static`
+(аватары) + mount `/assets` (сборка фронтенда) + SPA catch-all
+`/{full_path:path}` (отдаёт `frontend/dist/index.html`, для `/api*` — 404 JSON).
+Клиентская часть блога — React SPA в `frontend/` (Vite + TypeScript +
+Tailwind v4, сборка не коммитится).
 
-Проверка счётчика: `cd fastapi-application && ../.venv/bin/python -c "from main import main_app; print(len(main_app.routes))"` → `41`.
-Разбивка: 34 `APIRoute` (21 из `router_api`/`r_users_sql`/`r_order_one` + 13 из `api_blog.py`) + 5 `Route` (4 служебных + SPA catch-all) + 2 `Mount` (`/static` блога, `/assets` SPA).
+Проверка счётчика: `cd fastapi-application && ../.venv/bin/python -c "from main import main_app; print(len(main_app.routes))"` → `44`.
+Разбивка: 37 `APIRoute` (21 демо из `router_api`/`r_users_sql`/`r_order_one`
++ 7 из `api_blog.py` + 9 из `auth_users`) + 5 `Route` (4 служебных + SPA
+catch-all) + 2 `Mount` (`/static` блога, `/assets` SPA).
 
 ```
 my-fastapi-one/                 <- корень репозитория; здесь запускается qwen-code
@@ -91,6 +97,7 @@ my-fastapi-one/                 <- корень репозитория; здес
     ├── core/config.py           Settings: весь конфиг, env_file-профили
     ├── db_core/                 Base, AsyncDbManager, CurrentSession, типы колонок
     ├── api/                     демонстрационная часть: dependencies/ + my_routes_dep/
+    ├── auth_users/              отдельный слой авторизации (fastapi-users): User, UserManager, auth_backend, router — см. docs/04_authorization.md
     ├── ex_user_post/             домен User/Post: router + crud + models + schemas
     ├── ex_order_product/        домен Order/Product: router + models + schemas
     ├── md_articles/             блог: api_blog.py (JSON API), schema_art, модели, auth_middleware_helpers
@@ -182,7 +189,7 @@ Ruff и black объявлены в зависимостях проекта — 
 Тестов нет, поэтому изменения проверяются запуском самого приложения:
 
 ```bash
-cd fastapi-application && ../.venv/bin/python -c "from main import main_app; print(len(main_app.routes))"   # ожидается 40
+cd fastapi-application && ../.venv/bin/python -c "from main import main_app; print(len(main_app.routes))"   # ожидается 44
 ../.venv/bin/uvicorn main:main_app --port 8000    # затем curl:
 curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/docs
 curl -s http://127.0.0.1:8000/api/v1/dep_examples/single-direct-dependency

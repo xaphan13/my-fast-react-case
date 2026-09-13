@@ -56,17 +56,23 @@
 | `router_api` | `api/__init__.py` | `/api/v1` | `dep_examples/` (9 роутов Depends) + 4 стиля `/my_items/{item_id}` |
 | `r_users_sql` | `ex_user_post/router_users.py` | `/users` | CRUD-слой домена User/Post (2 роута) |
 | `r_order_one` | `ex_order_product/router_order_one.py` | `/orders` | 6 роутов Order: ORM/Core запись, фильтры, сортировка, joinedload |
-| `router_blog_api` | `md_articles/api_blog.py` | `/api/blog` | JSON API блога для React SPA: csrf, current_user, register/login/logout, account (GET/POST), articles, articles/{id}, art_manage + add_all + meta |
+| `router_blog_api` | `md_articles/api_blog.py` | `/api/blog` | JSON API блога для React SPA: articles, sections, articles/{id}, art_manage + add_all + meta + sync. Авторизация (login/logout/register/users/me/account) вынесена в пакет `auth_users` (см. `docs/04_authorization.md`). |
 
-Итого 41 route-объект: 21 API + служебные `/docs`, `/redoc`, `/openapi.json`,
-`/docs/oauth2-redirect` (кастомные Swagger/ReDoc регистрирует `utils/docs.py`)
-+ 13 JSON-роутов блога + mount `/static` (аватары) + mount `/assets`
-(сборка фронтенда) + SPA catch-all `/{full_path:path}` (отдаёт
-`frontend/dist/index.html`, для `/api*` — 404 JSON). Клиентская часть блога —
-React SPA в `frontend/` (Vite + TypeScript + Tailwind v4, сборка не коммитится).
+Итого 44 route-объекта: 21 API демо-доменов (`api/`, `ex_user_post/`, `ex_order_product/`)
++ 7 JSON-роутов блога (`/api/blog/*`) + 9 auth-роутов из пакета `auth_users/`
+(`/auth/jwt/{login,logout}`, `/auth/register`, `/auth/account`,
+`/users/me` (GET/PATCH), `/users/{id}` (GET/PATCH/DELETE))
++ 4 служебных `/docs`, `/redoc`, `/openapi.json`, `/docs/oauth2-redirect`
+(кастомные Swagger/ReDoc регистрирует `utils/docs.py`) + mount `/static`
+(аватары) + mount `/assets` (сборка фронтенда) + SPA catch-all
+`/{full_path:path}` (отдаёт `frontend/dist/index.html`, для `/api*` — 404 JSON).
+Клиентская часть блога — React SPA в `frontend/` (Vite + TypeScript +
+Tailwind v4, сборка не коммитится).
 
-Проверка счётчика: `cd fastapi-application && ../.venv/bin/python -c "from main import main_app; print(len(main_app.routes))"` → `41`.
-Разбивка: 34 `APIRoute` (21 из `router_api`/`r_users_sql`/`r_order_one` + 13 из `api_blog.py`) + 5 `Route` (4 служебных + SPA catch-all) + 2 `Mount` (`/static` блога, `/assets` SPA).
+Проверка счётчика: `cd fastapi-application && ../.venv/bin/python -c "from main import main_app; print(len(main_app.routes))"` → `44`.
+Разбивка: 37 `APIRoute` (21 демо из `router_api`/`r_users_sql`/`r_order_one`
++ 7 из `api_blog.py` + 9 из `auth_users`) + 5 `Route` (4 служебных + SPA
+catch-all) + 2 `Mount` (`/static` блога, `/assets` SPA).
 
 ```
 my-fastapi-one/                 <- корень репозитория; здесь запускается qwen-code
@@ -183,7 +189,7 @@ Ruff и black объявлены в зависимостях проекта — 
 Тестов нет, поэтому изменения проверяются запуском самого приложения:
 
 ```bash
-cd fastapi-application && ../.venv/bin/python -c "from main import main_app; print(len(main_app.routes))"   # ожидается 40
+cd fastapi-application && ../.venv/bin/python -c "from main import main_app; print(len(main_app.routes))"   # ожидается 44
 ../.venv/bin/uvicorn main:main_app --port 8000    # затем curl:
 curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/docs
 curl -s http://127.0.0.1:8000/api/v1/dep_examples/single-direct-dependency
@@ -366,7 +372,7 @@ nginx находятся в `.gitignore` — никогда не добавля�
 | Агент | Зона (можно редактировать) | Чем проверяет изменения | Особые запреты |
 |---|---|---|---|
 | frontend-dev | `frontend/` (React SPA: источники, Vite-конфиги, сборка), `nginx/web/` (если появится в задании) | `cd frontend && npm run build` без ошибок; просмотр страницы; скриншот в `tasks/current/screenshots/` | Python-модули `fastapi-application/` — зона backend-dev; `frontend/dist` не коммитится |
-| backend-dev | Python-модули `fastapi-application/` (включая `alembic/`, env-профили, `md_articles/` с JSON API `api_blog.py`) | `uv run ruff check .`; `cd fastapi-application && ../.venv/bin/python -c "from main import main_app; print(len(main_app.routes))"` (текущее значение: 42); curl изменённых эндпоинтов на запущенном приложении | `frontend/`, `nginx/web/`; устаревшие API из раздела «Известные дефекты» — не чинить без отдельного задания; дублирование `api/my_routes_dep/` — намеренное |
+| backend-dev | Python-модули `fastapi-application/` (включая `alembic/`, env-профили, `md_articles/` с JSON API `api_blog.py`, **`auth_users/`** — отдельный слой авторизации fastapi-users) | `uv run ruff check .`; `cd fastapi-application && ../.venv/bin/python -c "from main import main_app; print(len(main_app.routes))"` (текущее значение: 44); curl изменённых эндпоинтов на запущенном приложении | `frontend/`, `nginx/web/`; устаревшие API из раздела «Известные дефекты» — не чинить без отдельного задания; дублирование `api/my_routes_dep/` — намеренное |
 | qa | `tasks/current/e2e/`, `tasks/current/DEFECTS.md`, `tasks/current/screenshots/` | curl-сценарии из критериев успеха текущего задания; регресс: `/docs`, `/users/get_all_users`, `/orders/get_all_orders`, один из `/api/v1/dep_examples/*`, `/art_home` | любой код продукта |
 | adversary | `tasks/current/ADVERSARIAL_REVIEW.md`, `tasks/current/screenshots/` | curl по запущенному приложению; логи `fastapi-application/log/` | всё, кроме своих файлов |
 | spec-writer | `tasks/current/REQUIREMENTS.md` — только на фазе создания задания, одним `write_file` по шаблону `.qwen/skills/task-spec/TEMPLATE.md` | чек-лист скилла `task-spec` (проверяет оркестратор) | код продукта; всё, кроме REQUIREMENTS.md на фазе создания |

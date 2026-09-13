@@ -4,7 +4,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { login, MessageResp } from '../api/auth';
+import { login } from '../api/auth';
 import { ApiError } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
@@ -28,24 +28,27 @@ export default function LoginPage() {
     }
     setSubmitting(true);
     try {
-      const resp: MessageResp & { user: User } = await login({
-        email,
-        password,
-      });
-      setUser(resp.user);
-      showToast(resp.message, resp.category as ToastCategory);
+      // fastapi-users /auth/jwt/login -> 204, затем /users/me.
+      const user: User = await login({ email, password });
+      setUser(user);
+      showToast('Вход выполнен', 'success');
       navigate('/');
     } catch (err) {
-      // 401: неверные email/пароль — сообщение бэкенда в toast danger.
+      // fastapi-users /auth/jwt/login: 400 при неверных email/пароле,
+      // 401 для анонима. 400 — неверный логин/пароль.
       let message = 'Не удалось войти';
       let category: ToastCategory = 'danger';
       if (err instanceof ApiError) {
-        const data = err.data as
-          | { message?: string; category?: string; detail?: string }
-          | null;
-        if (data?.message) message = data.message;
-        else if (data?.detail) message = data.detail;
-        if (data?.category) category = data.category as ToastCategory;
+        if (err.status === 400) {
+          message = 'Неверный email или пароль';
+        } else {
+          const data = err.data as
+            | { message?: string; category?: string; detail?: string }
+            | null;
+          if (data?.message) message = data.message;
+          else if (data?.detail) message = data.detail;
+          if (data?.category) category = data.category as ToastCategory;
+        }
       }
       showToast(message, category);
     } finally {

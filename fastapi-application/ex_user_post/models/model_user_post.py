@@ -65,6 +65,6 @@ class Post(Base):
     )
 
     author = relationship(
-        "User",
+        "ex_user_post.models.model_user_post.User",
         back_populates="posts",
     )

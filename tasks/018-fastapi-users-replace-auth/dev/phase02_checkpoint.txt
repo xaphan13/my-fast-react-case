@@ -1,0 +1,14 @@
+=== Checkpoint 1: from auth_users import router; print(len(router.routes)) ===
+9
+
+=== Checkpoint 2: from auth_users import auth_backend; print(name, cookie_name) ===
+jwt auth
+
+=== Checkpoint 3: from core.config import settings; print(cookie_name, jwt_lifetime_seconds) ===
+auth 86400
+
+=== Bonus 5: from main import main_app; print(len(main_app.routes)) ===
+42
+
+=== Bonus: from auth_users import <all 16 symbols> ===
+all 16 exports OK, router routes: 9

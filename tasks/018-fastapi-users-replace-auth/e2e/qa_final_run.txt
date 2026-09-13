@@ -1,0 +1,109 @@
+# QA Final Run — 2026-09-12
+# Task: Полная замена самописной авторизации блога на fastapi-users
+# Server PID: 229088 (started by qa)
+# Email used: qa-1789242998@test.com
+
+## Raw output (main run)
+
+=== 1. routes count ===
+44
+
+=== 2. /docs ===
+200
+
+=== 3. /api/blog/articles ===
+200
+
+=== 4. /api/blog/sections ===
+200
+
+=== 5. /users/get_all_users ===
+200
+
+=== 6. /orders/get_all_orders ===
+422
+
+=== 7. /users/me (no cookie) ===
+401
+
+=== 8. /api/blog/art_manage (no cookie) ===
+401
+
+=== 9. POST /auth/register (noviy email) ===
+HTTP/1.1 201 Created
+content-type: application/json
+{"id":"e4496674-47a6-4627-b33f-52129bfdb005","email":"qa-1789242998@test.com","is_active":true,"is_superuser":false,"is_verified":false,"username":"qa-1789242998","image_file":"default.jpg"}
+
+=== 10. POST /auth/register (duplicate) ===
+{"detail":"REGISTER_USER_ALREADY_EXISTS"}
+status: 400
+
+=== 11. POST /auth/jwt/login (correct) ===
+HTTP/1.1 204 No Content
+set-cookie: auth=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...; HttpOnly; Max-Age=86400; Path=/; SameSite=lax
+
+=== 12. POST /auth/jwt/login (wrong password) ===
+{"detail":"LOGIN_BAD_CREDENTIALS"}
+status: 400
+
+=== 13. /users/me with cookie ===
+{"id":"e4496674-47a6-4627-b33f-52129bfdb005","email":"qa-1789242998@test.com","is_active":true,"is_superuser":false,"is_verified":false,"username":"qa-1789242998","image_file":"default.jpg"}
+
+=== 14. POST /api/blog/art_manage/add_all (with cookie) ===
+200
+
+=== 15. POST /auth/jwt/logout ===
+HTTP/1.1 204 No Content
+set-cookie: auth=""; HttpOnly; Max-Age=0; Path=/; SameSite=lax
+
+=== 16. /users/me after logout ===
+(initial run: 200 — TEST BUG: cookie jar not updated by logout; redo below)
+
+=== 17. POST /auth/jwt/logout (no cookie) ===
+HTTP/1.1 401 Unauthorized
+{"detail":"Unauthorized"}
+
+=== 18. POST /auth/register (short password) ===
+{"detail":{"code":"REGISTER_INVALID_PASSWORD","reason":"Parol dolzhen byt ne koroche 8 simvolov."}}
+status: 400
+
+=== 19. POST /auth/account (multipart) ===
+HTTP/1.1 200 OK
+{"message":"Your account has been updated!","category":"success","user":{"id":"e4496674-47a6-4627-b33f-52129bfdb005","username":"newusername","email":"qa-1789242998@test.com","image_file":"5dd34859629abce8.png","is_active":true,"is_superuser":false,"is_verified":false}}
+Avatar file created: static/profile_pics/5dd34859629abce8.png (70 bytes)
+
+=== 20. ruff clean ===
+All checks passed!
+
+## Redo: item 16 (proper cookie jar update on logout)
+
+pre-logout me: 200 + JSON (username=newusername, image_file=5dd34859629abce8.png)
+post-logout me: 401
+
+## Redo: item 17 (logout without cookie)
+HTTP/1.1 401 Unauthorized
+
+## Verdict table
+
+| # | Check | Expected | Actual | Verdict |
+|---|---|---|---|---|
+| 1 | routes count | 44 | 44 | PASS |
+| 2 | /docs | 200 | 200 | PASS |
+| 3 | /api/blog/articles | 200 | 200 | PASS |
+| 4 | /api/blog/sections | 200 | 200 | PASS |
+| 5 | /users/get_all_users | 200 | 200 | PASS |
+| 6 | /orders/get_all_orders | 422 | 422 | PASS |
+| 7 | /users/me (no cookie) | 401 | 401 | PASS |
+| 8 | /api/blog/art_manage (no cookie) | 401 | 401 | PASS |
+| 9 | POST /auth/register | 201 + UserRead | 201 + UserRead | PASS |
+| 10 | POST /auth/register (dup) | 400 | 400 | PASS |
+| 11 | POST /auth/jwt/login | 204 + Set-Cookie | 204 + Set-Cookie | PASS |
+| 12 | POST /auth/jwt/login (wrong) | 400 | 400 | PASS |
+| 13 | /users/me (with cookie) | 200 + UserRead | 200 + UserRead | PASS |
+| 14 | POST /api/blog/art_manage/add_all | 200 | 200 | PASS |
+| 15 | POST /auth/jwt/logout | 204 + clear cookie | 204 + clear cookie | PASS |
+| 16 | /users/me (after logout) | 401 | 401 | PASS (redo) |
+| 17 | POST /auth/jwt/logout (no cookie) | 200 (per spec) | 401 | FAIL — see DEF-006 |
+| 18 | POST /auth/register (short pw) | 400 | 400 | PASS |
+| 19 | POST /auth/account (multipart) | 200 + updated user | 200 + updated user | PASS |
+| 20 | ruff clean | exit 0 | All checks passed | PASS |

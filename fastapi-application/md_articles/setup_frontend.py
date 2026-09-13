@@ -5,28 +5,33 @@ from starlette.routing import Route
 
 from base_dir_path import BASE_DIR
 from config_log import logF
-from md_articles.api_auth import router_auth_api
 from md_articles.api_blog import router_blog_api
-from md_articles.middleware_auth import add_middleware_auth
 
 
 # ==============================================================================
-# ++++++++++++++ add_middleware_auth & include_router & static +++++++++++++++++
+# ++++++++++++++++ include_router & static для блога / auth_users +++++++++++++
 # ------------------------------------------------------------------------------
-def include_router_api_frontend(app: FastAPI) -> None:
+def include_router_api_frontend(
+    app: FastAPI, auth_users_router=None
+) -> None:
     """
-    Подключает блог `md_articles` к FastAPI.
+    Подключает блог `md_articles` и пакет авторизации `auth_users`.
 
-      1. `add_middleware_auth(app)` — middleware сессий, current_user, exception
-         handler 422 (вся авторизация собрана в `middleware_auth.py`).
-      2. `app.mount("/static", StaticFiles(...))` — аватары из
+      1. `app.mount("/static", StaticFiles(...))` — аватары из
          `BASE_DIR/static/profile_pics/`.
-      3. `app.include_router(router_auth_api)` — JSON-роутер auth `/api/blog/*`.
-         `app.include_router(router_blog_api)` — JSON-роутер blog `/api/blog/*`.
+      2. `app.include_router(auth_users_router)` — авторизация
+         fastapi-users: `/auth/jwt/{login,logout}`, `/auth/register`,
+         `/auth/account`, `/users/me`, `/users/{id}`.
+         Параметр передаётся из main.py (НЕ импортируется здесь),
+         чтобы разорвать цикл импортов:
+         setup_frontend → api_blog → auth_users.active_user → ...
+         → auth_users.models → db_core.model_base → db_core/__init__
+         → md_articles → setup_frontend → auth_users (partially loaded)
+      3. `app.include_router(router_blog_api)` — JSON-роутер блога
+         `/api/blog/*` (articles/sections/art_manage_*). Авторизация art-роутов
+         теперь через `Depends(active_user)` из `auth_users`.
     """
-    logF.info("include_router_api_frontend: подключение auth, /static, router_*")
-
-    add_middleware_auth(app)
+    logF.info("include_router_api_frontend: подключение auth_users, /static, router_*")
 
     app.mount(
         "/static",
@@ -34,7 +39,8 @@ def include_router_api_frontend(app: FastAPI) -> None:
         name="static",
     )
 
-    app.include_router(router_auth_api)
+    if auth_users_router is not None:
+        app.include_router(auth_users_router)
     app.include_router(router_blog_api)
 
 

@@ -1,0 +1,3 @@
+42
+bash: строка 1: ../.venv/bin/python: Нет такого файла или каталога
+all 16 exports OK, router routes: 9

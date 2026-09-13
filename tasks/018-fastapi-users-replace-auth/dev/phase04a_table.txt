@@ -1,0 +1,2 @@
+tables: ['alembic_version', 'blog_post', 'blog_user', 'order_product_association', 'orders', 'posts', 'products', 'user', 'users']
+user columns: [('username', 'VARCHAR(20)'), ('image_file', 'VARCHAR(20)'), ('created_at', 'DATETIME'), ('id', 'CHAR(36)'), ('email', 'VARCHAR(320)'), ('hashed_password', 'VARCHAR(1024)'), ('is_active', 'BOOLEAN'), ('is_superuser', 'BOOLEAN'), ('is_verified', 'BOOLEAN')]

@@ -28,8 +28,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const data = await getCurrentUser();
-      setUser(data.user);
+      // fastapi-users /users/me возвращает User (или null при 401).
+      const currentUser = await getCurrentUser();
+      setUser(currentUser);
     } catch {
       // Неавторизованный или сбой сети — считаем анонимом.
       setUser(null);

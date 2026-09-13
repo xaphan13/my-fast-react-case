@@ -1,0 +1,1 @@
+удалён '/home/max/0_0_26_new_one/my-fast-react-case/fastapi-application/one_simple.db'

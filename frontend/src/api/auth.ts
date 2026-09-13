@@ -1,67 +1,42 @@
-// Функции API авторизации и аккаунта (/api/blog): register, login,
-// logout, getAccount, updateAccount (multipart). Форматы ответов —
-// по контракту API (REQUIREMENTS.md, таблица «Backend — Frontend»).
+// Функции API авторизации и аккаунта: register, login, logout,
+// getAccount, updateAccount (multipart). Backend — fastapi-users:
+// /auth/jwt/login (form, 204), /auth/jwt/logout (form, 204),
+// /auth/register (JSON, 201), /auth/account (multipart),
+// /users/me (JSON, 401 для анонима).
 
-import { getJson, postJson, postMultipart, ApiError } from './client';
+import { ApiError, getJson, postForm, postJson, postMultipart } from './client';
 import type { User } from '../types';
 
-// GET /api/blog/current_user — текущий пользователь или null.
-export function getCurrentUser(): Promise<{ user: User | null }> {
-  return getJson<{ user: User | null }>('/api/blog/current_user');
-}
-
-// Тип message/category возвращают все мутации /api/blog.
 export interface MessageResp {
   message: string;
   category: string;
 }
 
-// Формат ошибок валидации 422: { errors: { поле: [тексты] } }.
-export interface ApiErrorWithErrors extends ApiError {
-  errors?: Record<string, string[]>;
+// /auth/jwt/login отвечает 204 — фронт после успешного логина делает
+// refresh через /users/me (возвращает UserRead).
+export function login(body: { email: string; password: string }): Promise<User> {
+  const form = new URLSearchParams({
+    username: body.email,
+    password: body.password,
+  });
+  return postForm<unknown>('/auth/jwt/login', form).then(() => getJson<User>('/users/me'));
 }
 
-// Вытаскивает errors из 422-ответа backend (глобальный обработчик
-// RequestValidationError отдаёт { errors: ... }).
-export function extractErrors(err: unknown): Record<string, string[]> {
-  if (err instanceof ApiError) {
-    const data = err.data as { errors?: Record<string, string[]> } | null;
-    if (data && data.errors) return data.errors;
-  }
-  return {};
-}
-
-// POST /api/blog/register — регистрация нового пользователя.
-export function register(body: {
-  username: string;
-  email: string;
-  password: string;
-  confirm_password: string;
-}): Promise<MessageResp> {
-  return postJson<MessageResp>('/api/blog/register', body);
-}
-
-// POST /api/blog/login — вход; в ответе приходит обновлённый user.
-export function login(body: {
-  email: string;
-  password: string;
-  remember?: boolean;
-}): Promise<MessageResp & { user: User }> {
-  return postJson<MessageResp & { user: User }>('/api/blog/login', body);
-}
-
-// POST /api/blog/logout — выход (cookie-сессия сбрасывается на бэкенде).
+// /auth/jwt/logout отвечает 204 — фронт НЕ падает, если logout вернул ошибку.
 export function logout(): Promise<MessageResp> {
-  return postJson<MessageResp>('/api/blog/logout', {});
+  return postForm<MessageResp>('/auth/jwt/logout', new URLSearchParams())
+    .catch(() => ({ message: 'Logged out', category: 'info' }));
 }
 
-// GET /api/blog/account — данные аккаунта (403 для анонима).
-export function getAccount(): Promise<{ user: User }> {
-  return getJson<{ user: User }>('/api/blog/account');
+export function register(body: { email: string; password: string }): Promise<User> {
+  return postJson<User>('/auth/register', body);
 }
 
-// POST /api/blog/account — обновление username/email и (опционально)
-// аватара. CSRF-токен кладём полем формы (см. postMultipart в client.ts).
+export async function getAccount(): Promise<{ user: User }> {
+  const user = await getJson<User>('/users/me');
+  return { user };
+}
+
 export function updateAccount(body: {
   username: string;
   email: string;
@@ -70,11 +45,34 @@ export function updateAccount(body: {
   const formData = new FormData();
   formData.set('username', body.username);
   formData.set('email', body.email);
-  if (body.picture) {
-    formData.set('picture', body.picture);
+  if (body.picture) formData.set('picture', body.picture);
+  return postMultipart<MessageResp & { user: User }>('/auth/account', formData);
+}
+
+// getCurrentUser: для AuthContext.refresh() — возвращает User или null
+// (если 401 — пользователь не залогинен).
+export function getCurrentUser(): Promise<User | null> {
+  return getJson<User>('/users/me').catch((err) => {
+    if (err instanceof ApiError && err.status === 401) return null;
+    throw err;
+  });
+}
+
+// Хелпер для RegisterPage — маппит ошибки fastapi-users в формат полей.
+export function extractErrors(err: unknown): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  if (err instanceof ApiError) {
+    const data = err.data as
+      | { errors?: Record<string, string[]>; detail?: string | Array<{ loc?: unknown[]; msg?: string }> }
+      | null;
+    if (data?.errors) return data.errors;
+    if (typeof data?.detail === 'string') {
+      if (data.detail.startsWith('REGISTER_INVALID_PASSWORD')) {
+        out.password = [data.detail];
+      } else if (data.detail.startsWith('REGISTER_USER_ALREADY_EXISTS')) {
+        out.email = [data.detail];
+      }
+    }
   }
-  return postMultipart<MessageResp & { user: User }>(
-    '/api/blog/account',
-    formData,
-  );
+  return out;
 }

@@ -1,0 +1,26 @@
+=== register ===
+HTTP/1.1 500 Internal Server Error
+date: Sat, 12 Sep 2026 19:48:10 GMT
+server: uvicorn
+content-length: 21
+content-type: text/plain; charset=utf-8
+
+Internal Server Error
+=== login (no cookie) ===
+HTTP/1.1 400 Bad Request
+date: Sat, 12 Sep 2026 19:48:10 GMT
+server: uvicorn
+content-length: 34
+content-type: application/json
+
+{"detail":"LOGIN_BAD_CREDENTIALS"}
+=== users/me with cookie ===
+{"detail":"Unauthorized"}
+=== users/me without cookie ===
+HTTP 401
+=== regression: /users/get_all_users ===
+HTTP 200
+=== regression: /api/blog/articles ===
+HTTP 200
+=== regression: /docs ===
+HTTP 200

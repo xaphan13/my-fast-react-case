@@ -4,9 +4,8 @@
 
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { register, extractErrors, MessageResp } from '../api/auth';
+import { register, extractErrors } from '../api/auth';
 import { useToast } from '../components/Toast';
-import type { ToastCategory } from '../components/Toast';
 
 interface FormState {
   username: string;
@@ -74,8 +73,10 @@ export default function RegisterPage() {
     }
     setSubmitting(true);
     try {
-      const resp: MessageResp = await register(form);
-      showToast(resp.message, resp.category as ToastCategory);
+      // fastapi-users /auth/register: только email + password, возвращает User (201).
+      // Поля username/confirm_password из формы в новом контракте не используются.
+      await register({ email: form.email, password: form.password });
+      showToast('Регистрация выполнена', 'success');
       navigate('/login');
     } catch (err) {
       const serverErrors = extractErrors(err);

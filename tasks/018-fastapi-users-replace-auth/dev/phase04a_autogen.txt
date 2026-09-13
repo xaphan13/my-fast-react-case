@@ -1,0 +1,7 @@
+Generating /home/max/0_0_26_new_one/my-fast-react-case/fastapi-application/alembic/versions/2026-09-12_22-45--9832dd267803--add_auth_users_user_table.py ...  done
+Running post write hook 'black' ...
+reformatted /home/max/0_0_26_new_one/my-fast-react-case/fastapi-application/alembic/versions/2026-09-12_22-45--9832dd267803--add_auth_users_user_table.py
+
+All done! ✨ 🍰 ✨
+1 file reformatted.
+  done

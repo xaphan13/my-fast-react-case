@@ -7,15 +7,11 @@ from fastapi import (
     Depends,
     HTTPException,
     Query,
-    Request,
 )
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
-from md_articles.helpers_auth import (
-    require_login_api,
-    validate_csrf_header,
-)
+from auth_users import active_user
 from md_articles.schema_art import (
     get_art,
     get_articles,
@@ -115,7 +111,7 @@ async def article_detail(art_id: int):
 # ++++++++++++++++++++++++++++ art_manage API ++++++++++++++++++++++++++++++++++
 # ------------------------------------------------------------------------------
 @router_blog_api.get("/art_manage", name="blog_api.art_manage")
-async def art_manage_api(request: Request, _user=Depends(require_login_api)):
+async def art_manage_api(_user=Depends(active_user)):
     articles = get_articles()
     disk_files = set(scan_content_art())
     registered_files = {art.file_name for art in articles}
@@ -137,9 +133,7 @@ async def art_manage_api(request: Request, _user=Depends(require_login_api)):
 
 
 @router_blog_api.post("/art_manage/add_all", name="blog_api.art_manage_add_all")
-async def art_manage_add_all_api(request: Request, _user=Depends(require_login_api)):
-    await validate_csrf_header(request)
-
+async def art_manage_add_all_api(_user=Depends(active_user)):
     disk_files = set(scan_content_art())
     articles = list(get_articles())
     registered_files = {art.file_name for art in articles}
@@ -171,12 +165,9 @@ async def art_manage_add_all_api(request: Request, _user=Depends(require_login_a
 
 @router_blog_api.post("/art_manage/meta", name="blog_api.art_manage_meta")
 async def art_manage_meta_api(
-    request: Request,
     payload: MetaIn,
-    _user=Depends(require_login_api),
+    _user=Depends(active_user),
 ):
-    await validate_csrf_header(request)
-
     file_name = payload.file_name.strip()
     author = payload.author.strip()
     lang = payload.lang.strip()
@@ -226,14 +217,12 @@ async def art_manage_meta_api(
 
 
 @router_blog_api.post("/art_manage/sync", name="blog_api.art_manage_sync")
-async def art_manage_sync_api(request: Request, _user=Depends(require_login_api)):
+async def art_manage_sync_api(_user=Depends(active_user)):
     """
     Синхронизировать реестр articles.yaml с файлами на диске.
 
     Удаляет записи из реестра, для которых нет соответствующих .md файлов.
     """
-    await validate_csrf_header(request)
-
     removed, total = sync_registry_with_disk()
     if removed > 0:
         return {

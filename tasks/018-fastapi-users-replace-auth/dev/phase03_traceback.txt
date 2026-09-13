@@ -1,0 +1,12 @@
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/max/0_0_26_new_one/my-fast-react-case/.venv/lib/python3.12/site-packages/sqlalchemy/orm/clsregistry.py", line 219, in attempt_get
+    raise exc.InvalidRequestError(
+sqlalchemy.exc.InvalidRequestError: Multiple classes found for path "User" in the registry of this declarative base. Please use a fully module-qualified path.
+INFO:     127.0.0.1:53676 - "GET /orders/get_all_orders HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:53678 - "GET /users/me HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:53694 - "GET /api/blog/art_manage HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:53706 - "POST /api/blog/art_manage/add_all HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:53708 - "POST /auth/jwt/login HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:53710 - "POST /auth/register HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:53724 - "HEAD /docs HTTP/1.1" 200 OK
+INFO:     Shutting down

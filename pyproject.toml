@@ -20,8 +20,13 @@ dependencies = [
     "python-multipart>=0.0.18",
     "markdown>=3.7.0",
     "pyyaml>=6.0.2",
-    "bcrypt>=4.2.0",
+    "fastapi-users[sqlalchemy]>=14.0.1",
     "pillow>=11.0.0",
+    # ВНИМАНИЕ: спека просила удалить itsdangerous — НЕЛЬЗЯ, см. phase01_progress.md.
+    # starlette 0.50.0 не объявляет itsdangerous в install_requires, но
+    # middleware/sessions.py его импортирует. Без явной зависимости сессионный
+    # middleware блога падает с ModuleNotFoundError. Кандидат на обсуждение
+    # с оркестратором.
     "itsdangerous>=2.2.0",
 ]
 
